@@ -21,6 +21,11 @@ import GlobalniAI      from './components/GlobalniAI.jsx'
 import PwaUpdate       from './components/PwaUpdate.jsx'
 import { odkleniDosezek, DOSEZKI } from './dosezki.js'
 import { preveriPovezavo } from './api.js'
+import Projekti          from './pages/Projekti.jsx'
+import Izpiti            from './pages/Izpiti.jsx'
+import MiselniVzorec     from './pages/MiselniVzorec.jsx'
+import StudyMusic        from './components/StudyMusic.jsx'
+import HitraSeja         from './components/HitraSeja.jsx'
 
 export const AppKontekst = createContext(null)
 export function useApp() { return useContext(AppKontekst) }
@@ -77,13 +82,16 @@ const STRANI = {
   semester:   { oznaka: 'Semester',   ikona: 'ti-timeline',         komponenta: Semester   },
   dosezki:    { oznaka: 'Dosežki',    ikona: 'ti-trophy',           komponenta: Dosezki    },
   nastavitve: { oznaka: 'Nastavitve', ikona: 'ti-settings',         komponenta: Nastavitve },
+  projekti:   { oznaka: 'Projekti',   ikona: 'ti-users',            komponenta: Projekti   },
+  izpiti:     { oznaka: 'Izpiti',     ikona: 'ti-calendar-event',   komponenta: Izpiti     },
+  vzorec:     { oznaka: 'Miselni vzorci', ikona: 'ti-share',        komponenta: MiselniVzorec },
 }
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 function Sidebar({ stran, setStran, temno, setTemno, nalogeBadge,
                    aktivniPredmet, setAktivniPredmet, predmeti,
                    onKlikPredmet, onIskanje, mobilniMenuOdprt, setMobilniMenuOdprt,
-                   vseTagi, aktivniTag, setAktivniTag, onTedenski, jeOnline }) {
+                   vseTagi, aktivniTag, setAktivniTag, onTedenski, jeOnline, onHitraSeja }) {
   return (
     <>
       {mobilniMenuOdprt && (
@@ -108,9 +116,20 @@ function Sidebar({ stran, setStran, temno, setTemno, nalogeBadge,
           <i className="ti ti-search" /><span>Iskanje…</span><kbd>Ctrl+K</kbd>
         </button>
 
+        {/* Hitra seja gumb */}
+        <div style={{ padding: '8px 10px 0' }}>
+          <button
+            className="gumb gumb-primarni"
+            style={{ width: '100%', justifyContent: 'center', padding: '8px', fontSize: '0.82rem' }}
+            onClick={() => { onHitraSeja?.(); setMobilniMenuOdprt(false) }}
+          >
+            <i className="ti ti-bolt" /> Hitra seja
+          </button>
+        </div>
+
         <div className="sidebar-sekcija">
           <div className="sidebar-sekcija-naslov">Navigacija</div>
-          {['pregled', 'zapiski', 'urnik', 'naloge', 'ocene', 'statistike'].map(k => (
+          {['pregled', 'zapiski', 'urnik', 'naloge', 'ocene', 'statistike', 'izpiti'].map(k => (
             <button key={k} className={`nav-element ${stran === k ? 'aktiven' : ''}`}
               onClick={() => { setStran(k); setMobilniMenuOdprt(false) }}>
               <i className={`nav-ikona ti ${STRANI[k].ikona}`} />
@@ -122,7 +141,7 @@ function Sidebar({ stran, setStran, temno, setTemno, nalogeBadge,
 
         <div className="sidebar-sekcija">
           <div className="sidebar-sekcija-naslov">Orodja</div>
-          {['kviz', 'semester', 'dosezki'].map(k => (
+          {['kviz', 'semester', 'dosezki', 'projekti', 'vzorec'].map(k => (
             <button key={k} className={`nav-element ${stran === k ? 'aktiven' : ''}`}
               onClick={() => { setStran(k); setMobilniMenuOdprt(false) }}>
               <i className={`nav-ikona ti ${STRANI[k].ikona}`} />
@@ -219,6 +238,7 @@ export default function App() {
   const [aktivniTag,      setAktivniTag]      = useState(null)
   const [tedenski,        setTedenski]        = useState(false)
   const [dosezekPopup,    setDosezekPopup]    = useState(null)
+  const [hitraSeja,       setHitraSeja]       = useState(false)
   const [jeOnline,        setJeOnline]        = useState(null)  // null = preverjanje
   const [vseTagi,         setVseTagi]         = useState(() => {
     try { return JSON.parse(localStorage.getItem('studyos-tagi-cache') || '[]') } catch { return [] }
@@ -392,6 +412,7 @@ export default function App() {
             setAktivniTag={setAktivniTag}
             onTedenski={() => setTedenski(true)}
             jeOnline={jeOnline}
+            onHitraSeja={() => setHitraSeja(true)}
           />
 
           <main className={`glavna-vsebina ${brezOdmika ? 'brez-odmika' : ''}`}>
@@ -423,8 +444,24 @@ export default function App() {
           />
         )}
 
+        <StudyMusic />
         <PwaUpdate />
         <GlobalniAI />
+
+        {hitraSeja && (
+          <HitraSeja
+            onZapri={() => setHitraSeja(false)}
+            onZacniPomo={() => {
+              setHitraSeja(false)
+              window.dispatchEvent(new CustomEvent('studyos:zacni-pomo'))
+            }}
+            onOdpriZapiske={(predmetId) => {
+              setHitraSeja(false)
+              if (predmetId) setAktivniPredmet(predmetId)
+              setStran('zapiski')
+            }}
+          />
+        )}
 
         {tedenski && <TedeniskiPregled onZapri={() => setTedenski(false)} />}
 

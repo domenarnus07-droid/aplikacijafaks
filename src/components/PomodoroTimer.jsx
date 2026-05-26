@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { prikaziObvestilo } from '../toast.js'
+import { useApp } from '../App.jsx'
 
 const POMO_KLJUC  = 'studyos-pomo-casi'
 const SESIJE_KLJUC = 'studyos-pomo-sesije'
@@ -54,7 +55,16 @@ function zazvoni(frekvence = [523, 659, 784], trajanje = 0.6) {
   } catch {}
 }
 
+function shraniSesijoZPredmetom(tip, trajanje, predmet) {
+  try {
+    const sesije = beriSesije()
+    sesije.unshift({ tip, zacetek: new Date().toISOString(), trajanje, predmet: predmet || null })
+    localStorage.setItem(SESIJE_KLJUC, JSON.stringify(sesije.slice(0, 30)))
+  } catch {}
+}
+
 export default function PomodoroTimer() {
+  const { predmeti = [] } = useApp()
   const [odprt,         setOdprt]        = useState(false)
   const [faza,          setFaza]         = useState('delo')
   const [casi,          setCasi]         = useState(beriCase)
@@ -64,6 +74,10 @@ export default function PomodoroTimer() {
   const [pokaziZgod,    setPokazZgod]    = useState(false)
   const [sesije,        setSesije]       = useState(beriSesije)
   const [zvoki,         setZvoki]        = useState(() => localStorage.getItem('studyos-zvoki') !== 'off')
+  const [aktivniPredmet, setAktivniPredmet] = useState(() => localStorage.getItem('studyos-pomo-predmet') || '')
+
+  const aktivniPredmetRef = useRef(aktivniPredmet)
+  aktivniPredmetRef.current = aktivniPredmet
 
   const intervalRef = useRef(null)
   const fazeRef     = useRef(faza)
@@ -74,6 +88,13 @@ export default function PomodoroTimer() {
   skupajRef.current = skupaj
   casiRef.current   = casi
   zvokiRef.current  = zvoki
+
+  // Poslušaj za zunanji start (Hitra seja)
+  useEffect(() => {
+    const h = () => { setOdprt(true); setTece(true) }
+    window.addEventListener('studyos:zacni-pomo', h)
+    return () => window.removeEventListener('studyos:zacni-pomo', h)
+  }, [])
 
   // Posodobi čase ob spremembi iz Nastavitve
   useEffect(() => {
@@ -106,7 +127,7 @@ export default function PomodoroTimer() {
         if (f === 'delo') {
           const novi = skupajRef.current + 1
           setSkupaj(novi)
-          shraniSesijo('fokus', cs.delo)
+          shraniSesijoZPredmetom('fokus', cs.delo, aktivniPredmetRef.current)
           setSesije(beriSesije())
           const nasl = novi % 4 === 0 ? 'dolgi' : 'odmor'
           setFaza(nasl); setCas(cs[nasl] * 60)
@@ -119,7 +140,7 @@ export default function PomodoroTimer() {
             })
           }
         } else {
-          shraniSesijo('odmor', cs[f])
+          shraniSesijoZPredmetom('odmor', cs[f], aktivniPredmetRef.current)
           setSesije(beriSesije())
           setFaza('delo'); setCas(cs.delo * 60)
           if (zvokiRef.current) zazvoni([784, 659, 523])
@@ -204,6 +225,24 @@ export default function PomodoroTimer() {
               onClick={() => { setOdprt(false); window.dispatchEvent(new CustomEvent('studyos:pojdi-nastavitve')) }}
             >Nastavitvah</button>
           </div>
+
+          {/* Predmet selector */}
+          {predmeti.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 2px' }}>
+              <i className="ti ti-book" style={{ color: 'var(--besedilo3)', fontSize: '0.8rem', flexShrink: 0 }} />
+              <select
+                className="vhod izbira"
+                style={{ flex: 1, fontSize: '0.78rem', padding: '5px 8px' }}
+                value={aktivniPredmet}
+                onChange={e => { setAktivniPredmet(e.target.value); localStorage.setItem('studyos-pomo-predmet', e.target.value) }}
+                disabled={tece}
+                title={tece ? 'Ustavi timer za spremembo predmeta' : 'Izberi predmet za to sejo'}
+              >
+                <option value="">Brez predmeta</option>
+                {predmeti.map(p => <option key={p.id} value={p.id}>{p.ikona} {p.ime}</option>)}
+              </select>
+            </div>
+          )}
 
           {/* Zvok toggle */}
           <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>

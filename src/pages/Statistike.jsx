@@ -77,11 +77,57 @@ export default function Statistike() {
   const maxPomo = Math.max(1, ...Object.values(minutePoD))
   const danesTxt = danes.toISOString().slice(0, 10)
 
+  // ── Per-subject napredek (new section) ───────────────────────────────────────
+  const maxZapiski = Math.max(1, ...predmeti.map(p => zapiski.filter(z => z.predmet === p.id).length))
+  const napredekPoP = predmeti.map(p => {
+    const pZ = zapiski.filter(z => z.predmet === p.id).length
+    const pN = naloge.filter(n => n.predmet === p.id)
+    const pOpr = pN.filter(n => n.opravljeno).length
+    const pPomo = pomoSesije.filter(s => s.predmet === p.id && s.tip === 'fokus')
+    const pPomoMin = pPomo.reduce((a, s) => a + (s.trajanje || 0), 0)
+    return { ...p, zapiskov: pZ, nalogStevilo: pN.length, opravljenih: pOpr, pomoMin: pPomoMin }
+  })
+
   return (
     <>
       <div className="stran-glava">
         <h1 className="stran-naslov">Statistike</h1>
         <p style={{ color: 'var(--besedilo3)', fontSize: '0.875rem' }}>Tvoj napredek v številkah</p>
+      </div>
+
+      {/* Napredek po predmetih */}
+      <div className="kartica" style={{ marginBottom: 24 }}>
+        <div className="dash-kartica-naslov">
+          <i className="ti ti-chart-dots" style={{ color: 'var(--modra)' }} /> 📊 Napredek po predmetih
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+          {napredekPoP.map(p => {
+            const pct = maxZapiski > 0 ? Math.round(p.zapiskov / maxZapiski * 100) : 0
+            return (
+              <div key={p.id} style={{
+                background: 'var(--ozadje2)',
+                borderRadius: 10,
+                padding: '14px 16px',
+                border: `1.5px solid ${p.barva}33`,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <span style={{ fontSize: '1.4rem' }}>{p.ikona}</span>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '0.875rem' }}>{p.ime}</div>
+                    <div style={{ display: 'flex', gap: 8, fontSize: '0.7rem', color: 'var(--besedilo3)', marginTop: 2 }}>
+                      <span title="Zapiski">📝 {p.zapiskov}</span>
+                      {p.nalogStevilo > 0 && <span title="Opravljene naloge">✓ {p.opravljenih}/{p.nalogStevilo}</span>}
+                      {p.pomoMin > 0 && <span title="Pomodoro minute">🍅 {Math.round(p.pomoMin / 60 * 10) / 10}h</span>}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ height: 6, background: 'var(--ozadje3)', borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${pct}%`, background: p.barva, borderRadius: 3, transition: 'width 0.6s ease' }} />
+                </div>
+              </div>
+            )
+          })}
+        </div>
       </div>
 
       {/* Summary cards */}
@@ -215,6 +261,54 @@ export default function Statistike() {
           </div>
         </div>
       )}
+
+      {/* 8-tedenski fokus graf */}
+      {skupajSesij > 0 && (() => {
+        const tednov = 8
+        const tedni = []
+        for (let i = tednov - 1; i >= 0; i--) {
+          const od = new Date(danes); od.setDate(danes.getDate() - i * 7 - danes.getDay() + 1)
+          od.setHours(0, 0, 0, 0)
+          const do_ = new Date(od); do_.setDate(od.getDate() + 6)
+          const oznaka = `${od.getDate()}.${od.getMonth() + 1}`
+          let min = 0
+          pomoSesije.filter(s => s.tip === 'fokus').forEach(s => {
+            const d = new Date(s.zacetek)
+            if (d >= od && d <= do_) min += (s.trajanje || 0)
+          })
+          tedni.push({ oznaka, min, jeTedenski: i === 0 })
+        }
+        const maxT = Math.max(1, ...tedni.map(t => t.min))
+        const skupajT = tedni.reduce((a, t) => a + t.min, 0)
+        return (
+          <div className="kartica" style={{ marginBottom: 20 }}>
+            <div className="dash-kartica-naslov" style={{ justifyContent: 'space-between' }}>
+              <span><i className="ti ti-chart-histogram" style={{ color: '#8B5CF6' }} /> Fokus ure — zadnjih 8 tednov</span>
+              <span style={{ fontSize: '0.72rem', color: 'var(--besedilo3)', fontFamily: 'var(--mono)' }}>
+                {Math.round(skupajT / 60 * 10) / 10}h skupaj
+              </span>
+            </div>
+            <div className="pomo-graf">
+              {tedni.map((t, i) => {
+                const h = Math.max(4, Math.round((t.min / maxT) * 80))
+                return (
+                  <div key={i} className="pomo-graf-stolpec">
+                    {t.min > 0 && <div className="pomo-graf-vrednost">{Math.round(t.min / 60 * 10) / 10}h</div>}
+                    <div className="pomo-graf-palica" style={{
+                      height: h,
+                      background: t.jeTedenski ? '#8B5CF6' : '#8B5CF688',
+                      border: t.jeTedenski ? '2px solid #7C3AED' : 'none',
+                    }} title={`${t.oznaka}: ${t.min} min`} />
+                    <div className="pomo-graf-oznaka" style={{ color: t.jeTedenski ? '#8B5CF6' : 'var(--besedilo3)', fontWeight: t.jeTedenski ? 700 : 400 }}>
+                      {t.oznaka}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Naloge po prioriteti */}
       {skupajNalog > 0 && (

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { pridobiZapiske } from '../api.js'
 import { odkleniDosezek } from '../dosezki.js'
+import { beriKartice, shraniKartice, karticeZaDanes, izracunajNaslednjiPregled } from '../spacedRepetition.js'
 
 // ── Razčleni kartice iz zapiskov ──────────────────────────────────────────────
 function razcleniKartice(zapiski) {
@@ -232,6 +233,113 @@ function NastavitveKviza({ kartice, predmeti, onZacni }) {
   )
 }
 
+// ── SR Ponavljanje ────────────────────────────────────────────────────────────
+function SRPonavljanje() {
+  const [kartice, setKartice] = useState(() => karticeZaDanes())
+  const [indeks, setIndeks] = useState(0)
+  const [obrnjeno, setObrnjeno] = useState(false)
+  const [koncano, setKoncano] = useState(false)
+
+  const vse = beriKartice()
+  const danes = new Date().toISOString().slice(0, 10)
+  const skupajZaDanes = vse.filter(k => !k.nextReview || k.nextReview <= danes).length
+
+  function oceni(ocena) {
+    const kartica = kartice[indeks]
+    const posodobljene = beriKartice().map(k => {
+      if (k.id !== kartica.id) return k
+      return { ...k, ...izracunajNaslednjiPregled(k, ocena) }
+    })
+    shraniKartice(posodobljene)
+
+    if (indeks + 1 >= kartice.length) {
+      setKoncano(true)
+    } else {
+      setIndeks(i => i + 1)
+      setObrnjeno(false)
+    }
+  }
+
+  if (vse.length === 0) {
+    return (
+      <div className="prazno-stanje">
+        <div className="prazno-ikona">🗂️</div>
+        <p>Ni kartic za ponavljanje.</p>
+        <p style={{ fontSize: '0.8rem', marginTop: 6 }}>
+          Kartice se ustvarijo avtomatično iz zapiskov s Q:/A: pari.<br />
+          Lahko jih tudi uvozite iz zavihka Kviz.
+        </p>
+      </div>
+    )
+  }
+
+  if (skupajZaDanes === 0 || koncano) {
+    return (
+      <div className="prazno-stanje">
+        <div className="prazno-ikona">✅</div>
+        <p style={{ fontWeight: 700, fontSize: '1rem' }}>Vse kartice pregledane!</p>
+        <p style={{ fontSize: '0.8rem', marginTop: 4 }}>Skupaj kartic: {vse.length}</p>
+        <button className="gumb gumb-primarni" style={{ marginTop: 16 }}
+          onClick={() => { setKartice(karticeZaDanes()); setIndeks(0); setObrnjeno(false); setKoncano(false) }}>
+          <i className="ti ti-refresh" /> Osveži
+        </button>
+      </div>
+    )
+  }
+
+  const kartica = kartice[indeks]
+  if (!kartica) return null
+
+  return (
+    <div className="kviz-igra">
+      <div className="kviz-napredek-okvir">
+        <div className="kviz-napredek-vrstica">
+          <div className="kviz-napredek-polnilo" style={{ width: `${(indeks / kartice.length) * 100}%` }} />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--besedilo3)', marginTop: 4 }}>
+          <span>Kartica {indeks + 1} / {kartice.length}</span>
+          <span>SR interval: {kartica.interval || 1} dni</span>
+        </div>
+      </div>
+
+      <div className="sr-kartica" onClick={() => setObrnjeno(true)}>
+        <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--besedilo3)', marginBottom: 8 }}>
+          {obrnjeno ? '✅ Odgovor' : '❓ Vprašanje'}
+        </div>
+        <div style={{ fontSize: '1.05rem', fontWeight: 600, lineHeight: 1.6 }}>
+          {obrnjeno ? kartica.odgovor : kartica.vprašanje}
+        </div>
+        {!obrnjeno && (
+          <div style={{ fontSize: '0.72rem', color: 'var(--besedilo3)', marginTop: 12 }}>Klikni za odgovor</div>
+        )}
+      </div>
+
+      {obrnjeno ? (
+        <div className="sr-ocena-gumbi">
+          <button className="gumb" style={{ background: '#ef4444', color: '#fff' }} onClick={() => oceni(0)}>
+            <i className="ti ti-brain" /> 0<br /><span style={{ fontSize: '0.68rem' }}>Ne znam</span>
+          </button>
+          <button className="gumb" style={{ background: '#f59e0b', color: '#fff' }} onClick={() => oceni(1)}>
+            <i className="ti ti-mood-confuzed" /> 1<br /><span style={{ fontSize: '0.68rem' }}>Težko</span>
+          </button>
+          <button className="gumb" style={{ background: '#3b82f6', color: '#fff' }} onClick={() => oceni(2)}>
+            <i className="ti ti-mood-happy" /> 2<br /><span style={{ fontSize: '0.68rem' }}>Ok</span>
+          </button>
+          <button className="gumb" style={{ background: '#22c55e', color: '#fff' }} onClick={() => oceni(3)}>
+            <i className="ti ti-star" /> 3<br /><span style={{ fontSize: '0.68rem' }}>Zlahka</span>
+          </button>
+        </div>
+      ) : (
+        <div style={{ textAlign: 'center' }}>
+          <button className="gumb gumb-primarni" style={{ padding: '11px 32px' }} onClick={() => setObrnjeno(true)}>
+            <i className="ti ti-eye" /> Pokaži odgovor
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Glavna stran ──────────────────────────────────────────────────────────────
 export default function GlobalniKviz() {
   const [vsaKartice,  setVsaKartice]  = useState([])
@@ -244,6 +352,7 @@ export default function GlobalniKviz() {
   const [faza,        setFaza]        = useState('nastavitve')  // 'nastavitve' | 'kviz' | 'rezultati'
   const [nalaga,      setNalaga]      = useState(true)
   const [predmeti,    setPredmeti]    = useState([])
+  const [zavihek,     setZavihek]     = useState('kviz')  // 'kviz' | 'sr'
 
   useEffect(() => {
     const shranPred = JSON.parse(localStorage.getItem('studyos-predmeti') || '[]')
@@ -320,14 +429,21 @@ export default function GlobalniKviz() {
 
   const trenutna = kartice[indeks]
 
+  const srKarticeSt = (() => {
+    try {
+      const danes = new Date().toISOString().slice(0, 10)
+      return beriKartice().filter(k => !k.nextReview || k.nextReview <= danes).length
+    } catch { return 0 }
+  })()
+
   return (
     <div className="kviz-okvir">
       <div className="stran-glava">
         <h1 className="stran-naslov">
           <i className="ti ti-cards" style={{ color: 'var(--modra)', marginRight: 8 }} />
-          Globalni kviz
+          Kviz
         </h1>
-        {faza === 'kviz' && (
+        {faza === 'kviz' && zavihek === 'kviz' && (
           <button className="gumb gumb-sekundarni" style={{ padding: '7px 14px', fontSize: '0.82rem' }}
             onClick={() => setFaza('nastavitve')}>
             <i className="ti ti-x" /> Zapri kviz
@@ -335,11 +451,26 @@ export default function GlobalniKviz() {
         )}
       </div>
 
-      {faza === 'nastavitve' && (
+      {/* Tabs */}
+      <div className="filtri" style={{ marginBottom: 20 }}>
+        <button className={`filter-gumb ${zavihek === 'kviz' ? 'aktiven' : ''}`} onClick={() => setZavihek('kviz')}>
+          <i className="ti ti-cards" /> Kviz
+        </button>
+        <button className={`filter-gumb ${zavihek === 'sr' ? 'aktiven' : ''}`} onClick={() => setZavihek('sr')}>
+          <i className="ti ti-refresh" /> Ponavljanje (SR)
+          {srKarticeSt > 0 && (
+            <span className="znacka" style={{ marginLeft: 6 }}>{srKarticeSt}</span>
+          )}
+        </button>
+      </div>
+
+      {zavihek === 'sr' && <SRPonavljanje />}
+
+      {zavihek === 'kviz' && faza === 'nastavitve' && (
         <NastavitveKviza kartice={vsaKartice} predmeti={predmeti} onZacni={zacniKviz} />
       )}
 
-      {faza === 'kviz' && trenutna && (
+      {zavihek === 'kviz' && faza === 'kviz' && trenutna && (
         <div className="kviz-igra">
           {/* Napredek */}
           <div className="kviz-napredek-okvir">
@@ -382,7 +513,7 @@ export default function GlobalniKviz() {
         </div>
       )}
 
-      {faza === 'rezultati' && (
+      {zavihek === 'kviz' && faza === 'rezultati' && (
         <RezultatiPogled
           tocne={tocne}
           zmotne={zmotne}

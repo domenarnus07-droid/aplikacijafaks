@@ -8,6 +8,8 @@ import Flashcards from '../components/Flashcards.jsx'
 import GlasovniVnos from '../components/GlasovniVnos.jsx'
 import { odkleniDosezek } from '../dosezki.js'
 import PredlogeZapiskov from '../components/PredlogeZapiskov.jsx'
+import UvozDatoteke from '../components/UvozDatoteke.jsx'
+import { izvleciBesedilo, jePodprtaTip } from '../uvozBesedila.js'
 
 // ── Version history ────────────────────────────────────────────────────────────
 function shraniVerzijo(id, vsebina, naslov) {
@@ -344,6 +346,7 @@ export default function Zapiski() {
   const [chatVhod,      setChatVhod]      = useState('')
   const [fokusNacin,    setFokusNacin]    = useState(false)
   const [predlogeOdprte, setPredlogeOdprte] = useState(false)
+  const [uvozOdprt, setUvozOdprt] = useState(false)
   const [fcNalaga,      setFcNalaga]      = useState(false)
   const [chatNalaga,  setChatNalaga]  = useState(false)
   const chatSpodajRef = useRef(null)
@@ -664,6 +667,8 @@ export default function Zapiski() {
     const files = Array.from(e.dataTransfer.files)
     const textFile = files.find(f => f.name.endsWith('.md') || f.name.endsWith('.txt'))
     const imgFile  = files.find(f => f.type.startsWith('image/'))
+    const docFile  = files.find(f => jePodprtaTip(f) && !f.name.toLowerCase().endsWith('.txt'))
+
     if (textFile) {
       const vsebina = await textFile.text()
       if (!aktivni) return
@@ -678,8 +683,22 @@ export default function Zapiski() {
         prikaziObvestilo(`Slika "${imgFile.name}" dodana`, 'uspeh')
       }
       reader.readAsDataURL(imgFile)
+    } else if (docFile && aktivni) {
+      prikaziObvestilo(`Uvažam "${docFile.name}"…`, 'info')
+      try {
+        const besedilo = await izvleciBesedilo(docFile)
+        if (!besedilo || !besedilo.trim()) {
+          prikaziObvestilo('Datoteka je prazna ali ni besedila', 'napaka')
+          return
+        }
+        const obstoječa = aktivni.vsebina || ''
+        spremeniPolje('vsebina', obstoječa ? obstoječa + '\n\n' + besedilo : besedilo)
+        prikaziObvestilo(`"${docFile.name}" dodan v zapisek`, 'uspeh')
+      } catch (err) {
+        prikaziObvestilo('Napaka pri uvozu: ' + err.message, 'napaka')
+      }
     } else {
-      prikaziObvestilo('Podprte so .md, .txt in slikovne datoteke', 'napaka')
+      prikaziObvestilo('Podprte so .md, .txt, .pdf, .docx, .xlsx, .pptx in slike', 'napaka')
     }
   }
 
@@ -763,9 +782,14 @@ export default function Zapiski() {
               onChange={e => setIskanje(e.target.value)}
             />
           </div>
-          <button className="gumb gumb-primarni" style={{ width: '100%', justifyContent: 'center' }} onClick={novZapisek}>
-            <i className="ti ti-plus" /> Nov zapisek
-          </button>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button className="gumb gumb-primarni" style={{ flex: 1, justifyContent: 'center' }} onClick={novZapisek}>
+              <i className="ti ti-plus" /> Nov zapisek
+            </button>
+            <button className="gumb gumb-sekundarni" style={{ padding: '9px 11px' }} onClick={() => setUvozOdprt(true)} title="Uvozi datoteko (PDF, DOCX, XLSX, PPTX, TXT)">
+              <i className="ti ti-paperclip" />
+            </button>
+          </div>
         </div>
 
         <div className="zapiski-seznam">
@@ -961,8 +985,23 @@ export default function Zapiski() {
               </button>
 
               {/* Kopiraj link */}
-              <button className="gumb-ikona" onClick={kopirajLink} title="Kopiraj povezavo">
+              <button className="gumb-ikona" onClick={kopirajLink} title="Kopiraj globoko povezavo">
                 <i className="ti ti-link" />
+              </button>
+
+              {/* Deli — kopiraj vsebino kot Markdown */}
+              <button
+                className="gumb-ikona"
+                onClick={() => {
+                  if (!aktivni) return
+                  const md = `# ${aktivni.naslov}\n\n${aktivni.vsebina || ''}`
+                  navigator.clipboard.writeText(md)
+                    .then(() => prikaziObvestilo('Vsebina kopirana v odložišče (Markdown) ✓', 'uspeh'))
+                    .catch(() => prikaziObvestilo('Kopiranje ni uspelo', 'napaka'))
+                }}
+                title="Kopiraj vsebino kot Markdown"
+              >
+                <i className="ti ti-share" />
               </button>
 
               {/* PDF */}
@@ -1211,6 +1250,28 @@ export default function Zapiski() {
           setPredlogeOdprte(false)
           setPredogled(false)
           prikaziObvestilo(`Predloga "${predloga.ime}" vstavljena ✓`, 'uspeh')
+        }}
+      />
+    )}
+
+    {/* Uvoz datoteke modal */}
+    {uvozOdprt && (
+      <UvozDatoteke
+        onZapri={() => setUvozOdprt(false)}
+        onUvoz={async (naslov, vsebina) => {
+          const nov = await ustvariZapisek({
+            naslov,
+            vsebina,
+            oznaka: 'modra',
+            predmet: aktivniPredmet || '',
+            tagi: [],
+          })
+          if (nov) {
+            setZapiski(zs => [nov, ...zs])
+            setAktivni(nov)
+            setPredogled(false)
+            localStorage.setItem('studyos-zadnji-zapisek', nov._id)
+          }
         }}
       />
     )}

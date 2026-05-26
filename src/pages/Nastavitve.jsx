@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { prikaziObvestilo } from '../toast.js'
 import { useApp, PREDMETI_PRIVZETI } from '../App.jsx'
+import BackupUvoz from '../components/BackupUvoz.jsx'
 import {
   pridobiZapiske, pridobiNaloge, pridobiUrnik,
   ustvariZapisek, ustvariNalogo,
@@ -373,6 +374,7 @@ export default function Nastavitve() {
 
   const [ime,       setIme]       = useState(() => localStorage.getItem('studyos-ime') || '')
   const [shranjeno, setShranjeno] = useState(false)
+  const [backupOdprt, setBackupOdprt] = useState(false)
   const [aiPonudnik, setAiPonudnik] = useState(() => localStorage.getItem('studyos-ai-ponudnik') || 'groq')
   // Vsak ponudnik ima lasten ključ — shranjen pod studyos-ai-kljuc-{ponudnik}
   const [aiKljuci,  setAiKljuci]  = useState(() => ({
@@ -734,6 +736,15 @@ export default function Nastavitve() {
           </Vrstica>
         </Sekcija>
 
+        {/* Backup & uvoz */}
+        <Sekcija naslov="💾 Backup & Uvoz">
+          <Vrstica opis="Varnostna kopija podatkov" podnapis="Izvozi ali uvozi vse zapiske, naloge, ocene in nastavitve kot JSON datoteko.">
+            <button className="gumb gumb-sekundarni" style={{ padding: '10px 20px' }} onClick={() => setBackupOdprt(true)}>
+              <i className="ti ti-database-export" /> Backup & Uvoz
+            </button>
+          </Vrstica>
+        </Sekcija>
+
         {/* Nevarne operacije */}
         <Sekcija naslov="⚠️  Ponastavi">
           <Vrstica opis="Ponastavi lokalne nastavitve" podnapis="Zbriše ime, temo in lokalne nastavitve. Baza ostane.">
@@ -778,6 +789,8 @@ export default function Nastavitve() {
           onZapri={() => setSmartUvozPodatki(null)}
         />
       )}
+
+      {backupOdprt && <BackupUvoz onZapri={() => setBackupOdprt(false)} />}
     </div>
   )
 }

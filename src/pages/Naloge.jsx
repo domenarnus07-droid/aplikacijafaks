@@ -1,10 +1,91 @@
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   pridobiNaloge, ustvariNalogo, preklopiOpravljenost, posodobiNalogo, izbrisiNalogo
 } from '../api.js'
 import { prikaziObvestilo } from '../toast.js'
 import { useApp } from '../App.jsx'
 import { odkleniDosezek } from '../dosezki.js'
+
+// ── Podnaloge ─────────────────────────────────────────────────────────────────
+function beriPodnaloge(nalogaId) {
+  try { return JSON.parse(localStorage.getItem(`studyos-podnaloge-${nalogaId}`) || '[]') } catch { return [] }
+}
+function shraniPodnaloge(nalogaId, podnaloge) {
+  try { localStorage.setItem(`studyos-podnaloge-${nalogaId}`, JSON.stringify(podnaloge)) } catch {}
+}
+function genPodId() { return Math.random().toString(36).slice(2) }
+
+function PodnalogePanel({ nalogaId }) {
+  const [podnaloge, setPodnaloge] = useState(() => beriPodnaloge(nalogaId))
+  const [novaTekst, setNovaTekst] = useState('')
+
+  function dodaj() {
+    if (!novaTekst.trim()) return
+    const nove = [...podnaloge, { id: genPodId(), besedilo: novaTekst.trim(), opravljeno: false }]
+    setPodnaloge(nove); shraniPodnaloge(nalogaId, nove)
+    setNovaTekst('')
+  }
+
+  function preklopi(id) {
+    const nove = podnaloge.map(p => p.id === id ? { ...p, opravljeno: !p.opravljeno } : p)
+    setPodnaloge(nove); shraniPodnaloge(nalogaId, nove)
+  }
+
+  function izbrisi(id) {
+    const nove = podnaloge.filter(p => p.id !== id)
+    setPodnaloge(nove); shraniPodnaloge(nalogaId, nove)
+  }
+
+  const opravljenih = podnaloge.filter(p => p.opravljeno).length
+  const pct = podnaloge.length > 0 ? Math.round(opravljenih / podnaloge.length * 100) : 0
+
+  return (
+    <div className="podnaloge-panel">
+      {podnaloge.length > 0 && (
+        <>
+          <div style={{ height: 3, background: 'var(--ozadje3)', borderRadius: 2, marginBottom: 8, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${pct}%`, background: 'var(--zelena)', borderRadius: 2, transition: 'width 0.3s' }} />
+          </div>
+          {podnaloge.map(p => (
+            <div key={p.id} className="podnaloga-vnos">
+              <button
+                className={`naloga-krogec ${p.opravljeno ? 'oznacen' : ''}`}
+                style={{ width: 16, height: 16, minWidth: 16 }}
+                onClick={() => preklopi(p.id)}
+              >
+                {p.opravljeno && <i className="ti ti-check" style={{ fontSize: '0.5rem', color: '#fff' }} />}
+              </button>
+              <span style={{ flex: 1, fontSize: '0.8rem', textDecoration: p.opravljeno ? 'line-through' : 'none', opacity: p.opravljeno ? 0.5 : 1, color: 'var(--besedilo2)' }}>
+                {p.besedilo}
+              </span>
+              <button className="gumb-ikona rdeca" style={{ width: 18, height: 18 }} onClick={() => izbrisi(p.id)}>
+                <i className="ti ti-x" style={{ fontSize: '0.55rem' }} />
+              </button>
+            </div>
+          ))}
+        </>
+      )}
+      <div style={{ display: 'flex', gap: 6, marginTop: podnaloge.length > 0 ? 6 : 0 }}>
+        <input
+          className="vhod"
+          style={{ flex: 1, fontSize: '0.78rem', padding: '4px 8px' }}
+          placeholder="Dodaj podnalogo… (Enter)"
+          value={novaTekst}
+          onChange={e => setNovaTekst(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && dodaj()}
+        />
+        <button className="gumb gumb-sekundarni" style={{ padding: '4px 10px', fontSize: '0.78rem' }} onClick={dodaj}>
+          <i className="ti ti-plus" />
+        </button>
+      </div>
+      {podnaloge.length > 0 && (
+        <div style={{ fontSize: '0.68rem', color: 'var(--besedilo3)', marginTop: 4 }}>
+          {opravljenih}/{podnaloge.length} podnalogeoppravleno
+        </div>
+      )}
+    </div>
+  )
+}
 
 const PRIORITETE = [
   { vrednost: 'visoka',  oznaka: '🔴 Visoka' },
@@ -401,7 +482,16 @@ export default function Naloge() {
   const [rucniRed,     setRucniRed]     = useState(false)
   const [izbrani,      setIzbrani]      = useState(new Set())
   const [bulkRezim,    setBulkRezim]    = useState(false)
+  const [razsirenePodnaloge, setRazsirenePodnaloge] = useState(new Set())
   const vhodRef = useRef(null)
+
+  function togglePodnaloge(id) {
+    setRazsirenePodnaloge(s => {
+      const ns = new Set(s)
+      ns.has(id) ? ns.delete(id) : ns.add(id)
+      return ns
+    })
+  }
 
   useEffect(() => {
     pridobiNaloge().then(ns => {
@@ -781,8 +871,8 @@ export default function Naloge() {
                 const rokInfo = rokBesedilo(n.rok)
                 const jeIzbrna = izbrani.has(n._id)
                 return (
+                  <React.Fragment key={n._id}>
                   <div
-                    key={n._id}
                     className={`naloga-element ${n.opravljeno ? 'opravljena' : ''} ${vleceni === n._id ? 'vleci' : ''} ${nadElementom === n._id ? 'nad-elementom' : ''} ${jeIzbrna ? 'bulk-izbrana' : ''}`}
                     style={n.pripeto ? { borderColor: 'var(--modra)', borderWidth: '1.5px' } : {}}
                     draggable={!bulkRezim}
@@ -845,6 +935,14 @@ export default function Naloge() {
                     </div>
 
                     {!bulkRezim && <>
+                      <button
+                        className={`gumb-ikona ${razsirenePodnaloge.has(n._id) ? 'aktiven' : ''}`}
+                        onClick={() => togglePodnaloge(n._id)}
+                        title="Podnaloge"
+                        style={{ color: razsirenePodnaloge.has(n._id) ? 'var(--modra)' : undefined }}
+                      >
+                        <i className="ti ti-subtask" />
+                      </button>
                       <button className={`gumb-ikona ${n.pripeto ? 'aktiven' : ''}`} onClick={() => preklopiPripeto(n)} title={n.pripeto ? 'Odpni' : 'Pripni'}>
                         <i className="ti ti-pin" />
                       </button>
@@ -856,6 +954,8 @@ export default function Naloge() {
                       </button>
                     </>}
                   </div>
+                  {razsirenePodnaloge.has(n._id) && <PodnalogePanel nalogaId={n._id} />}
+                  </React.Fragment>
                 )
               })}
             </div>

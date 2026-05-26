@@ -211,8 +211,29 @@ function shraniCilje(cilji) {
   try { localStorage.setItem('studyos-cilji', JSON.stringify({ teden: getTeden(), cilji })) } catch {}
 }
 
+function tedenFokusMin() {
+  try {
+    const sesije = JSON.parse(localStorage.getItem('studyos-pomo-sesije') || '[]')
+    const danes = new Date(); danes.setHours(0, 0, 0, 0)
+    const ponedeljek = new Date(danes)
+    ponedeljek.setDate(danes.getDate() - ((danes.getDay() + 6) % 7))
+    return sesije
+      .filter(s => s.tip === 'fokus' && new Date(s.zacetek) >= ponedeljek)
+      .reduce((a, s) => a + (s.trajanje || 0), 0)
+  } catch { return 0 }
+}
+
 function CiljiWidget() {
   const [cilji, setCilji] = useState(beriCilje)
+  const [ciljUre, setCiljUre] = useState(() => {
+    const v = localStorage.getItem('studyos-dash-cilj-ure')
+    return v ? Number(v) : 10
+  })
+  const [urejiUre, setUrejiUre] = useState(false)
+  const fokusMin = tedenFokusMin()
+  const fokusUre = Math.round(fokusMin / 60 * 10) / 10
+  const pct = Math.min(100, Math.round(fokusUre / ciljUre * 100))
+
   function preklopi(id) {
     const novi = cilji.map(c => c.id === id ? { ...c, opravljeno: !c.opravljeno } : c)
     setCilji(novi); shraniCilje(novi)
@@ -229,6 +250,34 @@ function CiljiWidget() {
         <span><i className="ti ti-target" style={{ color: 'var(--vijolicna)' }} /> Cilji tega tedna</span>
         {skupaj > 0 && <span style={{ fontSize: '0.75rem', fontFamily: 'var(--mono)', color: 'var(--besedilo3)' }}>{opravljenih}/{skupaj}</span>}
       </div>
+
+      {/* Fokus ure cilj */}
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+          <i className="ti ti-clock" style={{ color: '#F59E0B', fontSize: '0.8rem' }} />
+          <span style={{ fontSize: '0.78rem', fontWeight: 600, flex: 1 }}>
+            Fokus: {fokusUre}h / {' '}
+            {urejiUre
+              ? <input
+                  type="number" min="1" max="80"
+                  value={ciljUre}
+                  onChange={e => { const v = Number(e.target.value); setCiljUre(v); localStorage.setItem('studyos-dash-cilj-ure', v) }}
+                  onBlur={() => setUrejiUre(false)}
+                  autoFocus
+                  style={{ width: 44, fontSize: '0.78rem', fontWeight: 600, padding: '0 4px', border: '1px solid var(--modra)', borderRadius: 5, background: 'var(--ozadje1)', color: 'var(--besedilo1)', fontFamily: 'inherit' }}
+                />
+              : <span style={{ cursor: 'pointer', color: 'var(--besedilo3)', textDecoration: 'underline dotted' }} onClick={() => setUrejiUre(true)}>{ciljUre}h cilja</span>
+            }
+          </span>
+          <span style={{ fontSize: '0.75rem', fontFamily: 'var(--mono)', color: pct >= 100 ? 'var(--zelena)' : 'var(--besedilo3)', fontWeight: pct >= 100 ? 700 : 400 }}>
+            {pct}%{pct >= 100 ? ' 🎉' : ''}
+          </span>
+        </div>
+        <div style={{ height: 7, background: 'var(--ozadje3)', borderRadius: 4, overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${pct}%`, background: pct >= 100 ? 'var(--zelena)' : '#F59E0B', borderRadius: 4, transition: 'width 0.5s ease' }} />
+        </div>
+      </div>
+
       {cilji.map(c => (
         <div key={c.id} className="dash-cilji-vnos">
           <button
