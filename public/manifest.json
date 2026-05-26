@@ -3,15 +3,42 @@
   "short_name": "StudyOS",
   "description": "Osebni delovni prostor za študente FERI — program IPT",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#F0F4FF",
+  "background_color": "#0F172A",
   "theme_color": "#2563EB",
   "lang": "sl",
+  "orientation": "any",
+  "categories": ["education", "productivity"],
+  "screenshots": [],
   "icons": [
     {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='40' fill='%232563EB'/><text x='96' y='140' text-anchor='middle' font-size='120' font-family='system-ui'>🎓</text></svg>",
-      "sizes": "192x192",
-      "type": "image/svg+xml"
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Nov zapisek",
+      "short_name": "Zapisek",
+      "description": "Odpri StudyOS na zapiskih",
+      "url": "/#/zapiski",
+      "icons": [{ "src": "/icon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "Naloge",
+      "short_name": "Naloge",
+      "description": "Odpri StudyOS na nalogah",
+      "url": "/#/naloge",
+      "icons": [{ "src": "/icon.svg", "sizes": "any" }]
     }
   ]
 }

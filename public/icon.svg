@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1E3A8A"/>
+      <stop offset="60%" stop-color="#2563EB"/>
+      <stop offset="100%" stop-color="#3B82F6"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="0" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.12"/>
+      <stop offset="55%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- App icon background -->
+  <rect width="512" height="512" rx="108" ry="108" fill="url(#bg)"/>
+  <!-- Top gleam -->
+  <rect width="512" height="512" rx="108" ry="108" fill="url(#shine)"/>
+
+  <!-- ── Mortarboard graduation cap ────────────────────────── -->
+
+  <!-- Cap top face — diamond/rhombus -->
+  <polygon points="256,90 410,172 256,254 102,172" fill="white"/>
+
+  <!-- Cap top face subtle inner shadow (depth) -->
+  <polygon points="256,110 390,180 256,234 122,180" fill="#1E3A8A" fill-opacity="0.06"/>
+
+  <!-- Cap body — sits below the flat top -->
+  <path d="M158,234 L158,318 Q158,352 256,360 Q354,352 354,318 L354,234 Q318,256 256,262 Q194,256 158,234 Z"
+        fill="white" fill-opacity="0.92"/>
+
+  <!-- Subtle rim/band at hat opening -->
+  <ellipse cx="256" cy="360" rx="98" ry="16" fill="white" fill-opacity="0.55"/>
+
+  <!-- Tassel cord — from right corner of diamond down -->
+  <path d="M 410,172 L 410,278" stroke="white" stroke-width="11"
+        stroke-linecap="round" fill="none" stroke-opacity="0.9"/>
+  <!-- Tassel end ball -->
+  <circle cx="410" cy="293" r="16" fill="white" fill-opacity="0.9"/>
+  <!-- Tassel tiny fringe lines -->
+  <line x1="403" y1="307" x2="399" y2="322" stroke="white" stroke-width="4" stroke-linecap="round" stroke-opacity="0.6"/>
+  <line x1="410" y1="308" x2="410" y2="324" stroke="white" stroke-width="4" stroke-linecap="round" stroke-opacity="0.6"/>
+  <line x1="417" y1="307" x2="421" y2="322" stroke="white" stroke-width="4" stroke-linecap="round" stroke-opacity="0.6"/>
+
+  <!-- "OS" label at bottom -->
+  <text x="256" y="436"
+        text-anchor="middle"
+        font-family="system-ui,-apple-system,'Segoe UI',Arial,sans-serif"
+        font-size="74" font-weight="900" letter-spacing="6"
+        fill="white" fill-opacity="0.82">OS</text>
+</svg>

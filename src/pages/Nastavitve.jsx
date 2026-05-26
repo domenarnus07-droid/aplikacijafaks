@@ -6,6 +6,141 @@ import {
   ustvariZapisek, ustvariNalogo,
 } from '../api.js'
 
+// ── Smart uvoz (diff) modal ───────────────────────────────────────────────────
+function SmartUvozModal({ podatki, obstojeciZapiski, obstojeceNaloge, onPotrdi, onZapri }) {
+  const [uvozZapiske, setUvozZapiske] = useState(true)
+  const [uvozNaloge,  setUvozNaloge]  = useState(true)
+  const [uvazam,      setUvazam]      = useState(false)
+
+  // Analiza razlik
+  const obsNaslovi = new Set(obstojeciZapiski.map(z => z.naslov.toLowerCase().trim()))
+  const obsNaloge  = new Set(obstojeceNaloge.map(n => n.besedilo.toLowerCase().trim()))
+
+  const novZapiski  = (podatki.zapiski || []).filter(z => !obsNaslovi.has(z.naslov?.toLowerCase().trim()))
+  const dupZapiski  = (podatki.zapiski || []).filter(z => obsNaslovi.has(z.naslov?.toLowerCase().trim()))
+  const novNaloge   = (podatki.naloge || []).filter(n => !obsNaloge.has(n.besedilo?.toLowerCase().trim()))
+  const dupNaloge   = (podatki.naloge || []).filter(n => obsNaloge.has(n.besedilo?.toLowerCase().trim()))
+
+  async function potrdi() {
+    setUvazam(true)
+    let z = 0, n = 0
+    try {
+      if (uvozZapiske) {
+        for (const zapis of novZapiski) {
+          const { _id, __v, ustvarjen, posodobljen, ...rest } = zapis
+          if (await ustvariZapisek(rest)) z++
+        }
+      }
+      if (uvozNaloge) {
+        for (const naloga of novNaloge) {
+          const { _id, __v, ustvarjena, ...rest } = naloga
+          if (await ustvariNalogo(rest)) n++
+        }
+      }
+      prikaziObvestilo(`Uvoženo: ${z} zapiskov, ${n} nalog`, 'uspeh')
+      onPotrdi()
+    } catch {
+      prikaziObvestilo('Napaka pri uvozu', 'napaka')
+    } finally {
+      setUvazam(false)
+    }
+  }
+
+  return (
+    <div className="modal-ozadje" onClick={e => e.target === e.currentTarget && onZapri()}>
+      <div className="modal" style={{ maxWidth: 560, width: '95vw', maxHeight: '90vh', overflowY: 'auto' }}>
+        <h2 className="modal-naslov">
+          <i className="ti ti-file-diff" style={{ color: 'var(--modra)', marginRight: 8 }} />
+          Pametni uvoz
+        </h2>
+        <div style={{ fontSize: '0.82rem', color: 'var(--besedilo3)', marginBottom: 18 }}>
+          Pregled razlik med backup datoteko in obstoječimi podatki
+        </div>
+
+        {/* Zapiski diff */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 10 }}>
+            <input type="checkbox" checked={uvozZapiske} onChange={e => setUvozZapiske(e.target.checked)}
+              style={{ width: 16, height: 16 }} />
+            <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>Zapiski</span>
+          </label>
+          <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+            <span style={{ fontSize: '0.78rem', padding: '3px 10px', background: 'var(--zelena)20', color: 'var(--zelena)', borderRadius: 99, fontWeight: 600 }}>
+              +{novZapiski.length} novih
+            </span>
+            {dupZapiski.length > 0 && (
+              <span style={{ fontSize: '0.78rem', padding: '3px 10px', background: 'var(--besedilo3)20', color: 'var(--besedilo3)', borderRadius: 99 }}>
+                {dupZapiski.length} že obstaja (preskoči)
+              </span>
+            )}
+          </div>
+          {novZapiski.length > 0 && uvozZapiske && (
+            <div style={{ maxHeight: 140, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {novZapiski.slice(0, 8).map((z, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', background: 'var(--zelena)10', borderRadius: 6, border: '1px solid var(--zelena)30', fontSize: '0.78rem' }}>
+                  <i className="ti ti-plus" style={{ color: 'var(--zelena)', fontSize: '0.7rem' }} />
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{z.naslov}</span>
+                  {z.predmet && <span style={{ color: 'var(--besedilo3)', fontSize: '0.68rem' }}>{z.predmet}</span>}
+                </div>
+              ))}
+              {novZapiski.length > 8 && (
+                <div style={{ fontSize: '0.72rem', color: 'var(--besedilo3)', paddingLeft: 8 }}>in {novZapiski.length - 8} več…</div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Naloge diff */}
+        <div style={{ marginBottom: 20, paddingTop: 14, borderTop: '1px solid var(--rob)' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 10 }}>
+            <input type="checkbox" checked={uvozNaloge} onChange={e => setUvozNaloge(e.target.checked)}
+              style={{ width: 16, height: 16 }} />
+            <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>Naloge</span>
+          </label>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <span style={{ fontSize: '0.78rem', padding: '3px 10px', background: 'var(--zelena)20', color: 'var(--zelena)', borderRadius: 99, fontWeight: 600 }}>
+              +{novNaloge.length} novih
+            </span>
+            {dupNaloge.length > 0 && (
+              <span style={{ fontSize: '0.78rem', padding: '3px 10px', background: 'var(--besedilo3)20', color: 'var(--besedilo3)', borderRadius: 99 }}>
+                {dupNaloge.length} že obstaja (preskoči)
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Backup info */}
+        {podatki.datum && (
+          <div style={{ fontSize: '0.72rem', color: 'var(--besedilo3)', marginBottom: 14 }}>
+            <i className="ti ti-clock" /> Backup iz {new Date(podatki.datum).toLocaleDateString('sl-SI', { dateStyle: 'long' })}
+          </div>
+        )}
+
+        {novZapiski.length + novNaloge.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '16px 0', color: 'var(--besedilo3)', fontSize: '0.88rem', marginBottom: 14 }}>
+            <i className="ti ti-circle-check" style={{ fontSize: '1.5rem', display: 'block', marginBottom: 6 }} />
+            Vsi podatki v backupu že obstajajo.
+          </div>
+        ) : null}
+
+        <div className="modal-dno">
+          <button className="gumb gumb-sekundarni" onClick={onZapri}>Prekliči</button>
+          <button
+            className="gumb gumb-primarni"
+            onClick={potrdi}
+            disabled={uvazam || ((!uvozZapiske || novZapiski.length === 0) && (!uvozNaloge || novNaloge.length === 0))}
+          >
+            {uvazam
+              ? <><div className="nalagalnik" style={{ width: 14, height: 14, borderWidth: 2 }} /> Uvažam…</>
+              : <><i className="ti ti-upload" /> Uvozi {(uvozZapiske ? novZapiski.length : 0) + (uvozNaloge ? novNaloge.length : 0)} elementov</>
+            }
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Upravljanje predmetov ─────────────────────────────────────────────────────
 function PredmetiUpravljanje({ predmeti, onShrani }) {
   const [noviIme,   setNoviIme]   = useState('')
@@ -238,9 +373,25 @@ export default function Nastavitve() {
 
   const [ime,       setIme]       = useState(() => localStorage.getItem('studyos-ime') || '')
   const [shranjeno, setShranjeno] = useState(false)
-  const [aiKljuc,   setAiKljuc]   = useState(() => localStorage.getItem('studyos-ai-kljuc') || '')
+  const [aiPonudnik, setAiPonudnik] = useState(() => localStorage.getItem('studyos-ai-ponudnik') || 'groq')
+  // Vsak ponudnik ima lasten ključ — shranjen pod studyos-ai-kljuc-{ponudnik}
+  const [aiKljuci,  setAiKljuci]  = useState(() => ({
+    groq:      localStorage.getItem('studyos-ai-kljuc-groq')      || '',
+    gemini:    localStorage.getItem('studyos-ai-kljuc-gemini')    || '',
+    anthropic: localStorage.getItem('studyos-ai-kljuc-anthropic') || '',
+  }))
   const [aiShranjen, setAiShranjen] = useState(false)
-  const [uvazam,    setUvazam]    = useState(false)
+  const [ollamaUrl,  setOllamaUrl]  = useState(() => localStorage.getItem('studyos-ollama-url') || 'http://localhost:11434')
+  const [ollamaModel,setOllamaModel]= useState(() => localStorage.getItem('studyos-ollama-model') || 'llama3.2')
+
+  // Ključ za trenutni ponudnik
+  const aiKljuc = aiKljuci[aiPonudnik] || ''
+  function setAiKljuc(val) {
+    setAiKljuci(prev => ({ ...prev, [aiPonudnik]: val }))
+  }
+  const [uvazam,        setUvazam]        = useState(false)
+  const [smartUvozPodatki, setSmartUvozPodatki] = useState(null)
+  const [obstojeciData, setObstojeciData] = useState({ zapiski: [], naloge: [] })
   const [obvestilaDovoljenja, setObvestilaDovoljenja] = useState(
     () => typeof Notification !== 'undefined' ? Notification.permission : 'denied'
   )
@@ -254,9 +405,18 @@ export default function Nastavitve() {
   }
 
   function shraniAiKljuc() {
-    localStorage.setItem('studyos-ai-kljuc', aiKljuc.trim())
+    // Shrani aktivni ponudnik
+    localStorage.setItem('studyos-ai-ponudnik', aiPonudnik)
+    // Shrani ključ za VSAK ponudnik posebej (ne le aktivnega)
+    Object.entries(aiKljuci).forEach(([ponudnik, kljuc]) => {
+      if (kljuc.trim()) localStorage.setItem(`studyos-ai-kljuc-${ponudnik}`, kljuc.trim())
+    })
+    // Ohrani staro studyos-ai-kljuc za združljivost
+    localStorage.setItem('studyos-ai-kljuc', aiKljuci[aiPonudnik]?.trim() || '')
+    localStorage.setItem('studyos-ollama-url', ollamaUrl.trim())
+    localStorage.setItem('studyos-ollama-model', ollamaModel.trim())
     setAiShranjen(true)
-    prikaziObvestilo('AI API ključ shranjen', 'uspeh')
+    prikaziObvestilo(`${aiPonudnik === 'groq' ? 'Groq' : aiPonudnik === 'gemini' ? 'Gemini' : 'Anthropic'} ključ shranjen ✓`, 'uspeh')
     setTimeout(() => setAiShranjen(false), 2500)
   }
 
@@ -301,20 +461,13 @@ export default function Nastavitve() {
   async function uvozi(e) {
     const file = e.target.files?.[0]; if (!file) return
     e.target.value = ''
-    if (!confirm(`Uvozi podatke iz "${file.name}"?`)) return
     setUvazam(true)
     try {
       const podatki = JSON.parse(await file.text())
-      let z = 0, n = 0
-      for (const zapis of (podatki.zapiski || [])) {
-        const { _id, __v, ustvarjen, posodobljen, ...rest } = zapis
-        if (await ustvariZapisek(rest)) z++
-      }
-      for (const naloga of (podatki.naloge || [])) {
-        const { _id, __v, ustvarjena, ...rest } = naloga
-        if (await ustvariNalogo(rest)) n++
-      }
-      prikaziObvestilo(`Uvoženo: ${z} zapiskov, ${n} nalog`, 'uspeh')
+      // Naloži obstoječe podatke za primerjavo (diff)
+      const [zs, ns] = await Promise.all([pridobiZapiske(), pridobiNaloge()])
+      setObstojeciData({ zapiski: zs, naloge: ns })
+      setSmartUvozPodatki(podatki)
     } catch { prikaziObvestilo('Napaka — napačna datoteka?', 'napaka') }
     finally { setUvazam(false) }
   }
@@ -351,36 +504,111 @@ export default function Nastavitve() {
         </Sekcija>
 
         {/* AI asistent */}
-        <Sekcija naslov="🤖  AI asistent — Anthropic Claude">
-          <Vrstica
-            opis="Anthropic API ključ"
-            podnapis="Potreben za ✨ Povzemi funkcijo v zapiskih. Ključ se shrani lokalno."
-          >
-            <div style={{ display: 'flex', gap: 10 }}>
-              <input
-                className="vhod"
-                type="password"
-                style={{ width: 240, fontSize: '0.9rem', fontFamily: 'var(--mono)' }}
-                value={aiKljuc}
-                onChange={e => setAiKljuc(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && shraniAiKljuc()}
-                placeholder="sk-ant-…"
-              />
-              <button className="gumb gumb-primarni" style={{ padding: '10px 20px' }} onClick={shraniAiKljuc}>
-                {aiShranjen ? '✓ Shranjeno' : 'Shrani'}
-              </button>
+        <Sekcija naslov="🤖  AI asistent">
+
+          {/* Izbirnik ponudnika */}
+          <Vrstica opis="AI ponudnik" podnapis="Izberi ponudnika — Groq in Gemini sta popolnoma brezplačna">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
+              {[
+                { id: 'groq',      ikona: '⚡', ime: 'Groq',           opis: 'Zastonj · 14.400 klicev/dan · Llama 3.1',   barva: '#f97316', priporocen: true },
+                { id: 'gemini',    ikona: '🌟', ime: 'Google Gemini',   opis: 'Zastonj · 1.500 klicev/dan · Gemini Flash',  barva: '#4285f4' },
+                { id: 'ollama',    ikona: '🦙', ime: 'Ollama (lokalno)', opis: 'Zastonj · Brez interneta · Llama, Mistral…', barva: '#22c55e' },
+                { id: 'anthropic', ikona: '🔶', ime: 'Anthropic Claude', opis: 'Plačljiv · $5 brezplačnih kreditov ob vpisu', barva: '#d97706' },
+              ].map(p => (
+                <label key={p.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
+                  border: `2px solid ${aiPonudnik === p.id ? p.barva : 'var(--rob)'}`,
+                  borderRadius: 10, cursor: 'pointer',
+                  background: aiPonudnik === p.id ? `${p.barva}12` : 'var(--ozadje1)',
+                  transition: 'all 0.15s',
+                }}>
+                  <input type="radio" name="ponudnik" value={p.id}
+                    checked={aiPonudnik === p.id}
+                    onChange={() => { setAiPonudnik(p.id); localStorage.setItem('studyos-ai-ponudnik', p.id) }}
+                    style={{ accentColor: p.barva }} />
+                  <span style={{ fontSize: '1.3rem' }}>{p.ikona}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {p.ime}
+                      {p.priporocen && <span style={{ fontSize: '0.65rem', background: p.barva, color: '#fff', padding: '1px 7px', borderRadius: 99, fontWeight: 700 }}>PRIPOROČENO</span>}
+                      {p.id !== 'ollama' && aiKljuci[p.id] && <span style={{ fontSize: '0.65rem', background: 'var(--zelena)', color: '#fff', padding: '1px 7px', borderRadius: 99, fontWeight: 700 }}>✓ NASTAVLJEN</span>}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--besedilo3)', marginTop: 1 }}>{p.opis}</div>
+                  </div>
+                </label>
+              ))}
             </div>
           </Vrstica>
-          {aiKljuc && (
-            <Vrstica opis="Status" podnapis="Ključ je shranjen v brskalniku">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', color: 'var(--zelena)' }}>
-                <i className="ti ti-circle-check" /> Ključ nastavljen
-                <button
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--rdeca)', fontSize: '0.78rem' }}
-                  onClick={() => { localStorage.removeItem('studyos-ai-kljuc'); setAiKljuc(''); prikaziObvestilo('AI ključ izbrisan', 'info') }}
-                >
-                  <i className="ti ti-trash" /> Izbriši
+
+          {/* API ključ (razen za Ollama) */}
+          {aiPonudnik !== 'ollama' && (
+            <Vrstica
+              opis="API ključ"
+              podnapis={
+                aiPonudnik === 'groq'    ? <>Zastonj na <a href="https://console.groq.com" target="_blank" rel="noreferrer" style={{ color: 'var(--modra)' }}>console.groq.com</a> → API Keys → Create API Key</> :
+                aiPonudnik === 'gemini'  ? <>Zastonj na <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" style={{ color: 'var(--modra)' }}>aistudio.google.com</a> → Get API Key</> :
+                <>Plačljiv na <a href="https://console.anthropic.com" target="_blank" rel="noreferrer" style={{ color: 'var(--modra)' }}>console.anthropic.com</a> → API Keys</>
+              }
+            >
+              <div style={{ display: 'flex', gap: 10 }}>
+                <input
+                  className="vhod"
+                  type="password"
+                  style={{ width: 240, fontSize: '0.9rem', fontFamily: 'var(--mono)' }}
+                  value={aiKljuc}
+                  onChange={e => setAiKljuc(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && shraniAiKljuc()}
+                  placeholder={
+                    aiPonudnik === 'groq'    ? 'gsk_…' :
+                    aiPonudnik === 'gemini'  ? 'AIza…' :
+                    'sk-ant-…'
+                  }
+                />
+                <button className="gumb gumb-primarni" style={{ padding: '10px 20px' }} onClick={shraniAiKljuc}>
+                  {aiShranjen ? '✓' : 'Shrani'}
                 </button>
+              </div>
+            </Vrstica>
+          )}
+
+          {/* Ollama nastavitve */}
+          {aiPonudnik === 'ollama' && (
+            <Vrstica opis="Ollama nastavitve" podnapis="Potrebuješ nameščen Ollama — brezplačno na ollama.com">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--besedilo3)', width: 60 }}>URL</span>
+                  <input className="vhod" style={{ flex: 1, fontSize: '0.85rem', fontFamily: 'var(--mono)' }}
+                    value={ollamaUrl} onChange={e => setOllamaUrl(e.target.value)} placeholder="http://localhost:11434" />
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--besedilo3)', width: 60 }}>Model</span>
+                  <input className="vhod" style={{ flex: 1, fontSize: '0.85rem', fontFamily: 'var(--mono)' }}
+                    value={ollamaModel} onChange={e => setOllamaModel(e.target.value)} placeholder="llama3.2" />
+                </div>
+                <button className="gumb gumb-primarni" style={{ padding: '8px 20px', alignSelf: 'flex-start' }} onClick={shraniAiKljuc}>
+                  {aiShranjen ? '✓ Shranjeno' : 'Shrani'}
+                </button>
+              </div>
+            </Vrstica>
+          )}
+
+          {/* Status */}
+          {(aiKljuc || aiPonudnik === 'ollama') && (
+            <Vrstica opis="Status" podnapis="">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', color: 'var(--zelena)' }}>
+                <i className="ti ti-circle-check" />
+                {aiPonudnik === 'ollama' ? 'Ollama konfiguriran' : 'Ključ nastavljen'}
+                {aiPonudnik !== 'ollama' && (
+                  <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--rdeca)', fontSize: '0.78rem' }}
+                    onClick={() => {
+                      localStorage.removeItem(`studyos-ai-kljuc-${aiPonudnik}`)
+                      localStorage.removeItem('studyos-ai-kljuc')
+                      setAiKljuc('')
+                      prikaziObvestilo('Ključ izbrisan', 'info')
+                    }}>
+                    <i className="ti ti-trash" /> Izbriši
+                  </button>
+                )}
               </div>
             </Vrstica>
           )}
@@ -495,13 +723,13 @@ export default function Nastavitve() {
               <i className="ti ti-download" /> Izvozi
             </button>
           </Vrstica>
-          <Vrstica opis="Uvozi podatke" podnapis="Uvozi iz .json backup datoteke">
+          <Vrstica opis="Uvozi podatke" podnapis="Pametni uvoz z diff prikazom — vidi kaj se bo uvozilo">
             <input ref={uvozInputRef} type="file" accept=".json" style={{ display: 'none' }} onChange={uvozi} />
             <button className="gumb gumb-sekundarni" style={{ padding: '10px 20px' }}
               onClick={() => uvozInputRef.current?.click()} disabled={uvazam}>
               {uvazam
-                ? <><div className="nalagalnik" style={{ width: 16, height: 16, borderWidth: 2 }} /> Uvažam…</>
-                : <><i className="ti ti-upload" /> Uvozi</>}
+                ? <><div className="nalagalnik" style={{ width: 16, height: 16, borderWidth: 2 }} /> Nalagam…</>
+                : <><i className="ti ti-file-diff" /> Pametni uvoz</>}
             </button>
           </Vrstica>
         </Sekcija>
@@ -539,6 +767,17 @@ export default function Nastavitve() {
         </div>
 
       </div>
+
+      {/* Smart uvoz modal */}
+      {smartUvozPodatki && (
+        <SmartUvozModal
+          podatki={smartUvozPodatki}
+          obstojeciZapiski={obstojeciData.zapiski}
+          obstojeceNaloge={obstojeciData.naloge}
+          onPotrdi={() => setSmartUvozPodatki(null)}
+          onZapri={() => setSmartUvozPodatki(null)}
+        />
+      )}
     </div>
   )
 }

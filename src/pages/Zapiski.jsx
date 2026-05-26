@@ -1,10 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import {
-  pridobiZapiske, ustvariZapisek, posodobiZapisek, izbrisiZapisek, povzemiZapisek
+  pridobiZapiske, ustvariZapisek, posodobiZapisek, izbrisiZapisek, povzemiZapisek, aiRazgovor, generirajFlashcards
 } from '../api.js'
 import { prikaziObvestilo } from '../toast.js'
 import { useApp } from '../App.jsx'
 import Flashcards from '../components/Flashcards.jsx'
+import GlasovniVnos from '../components/GlasovniVnos.jsx'
+import { odkleniDosezek } from '../dosezki.js'
+import PredlogeZapiskov from '../components/PredlogeZapiskov.jsx'
 
 // ── Version history ────────────────────────────────────────────────────────────
 function shraniVerzijo(id, vsebina, naslov) {
@@ -36,10 +39,19 @@ function renderMd(raw, wikiZapiski = []) {
     return id
   })
 
-  // Code blocks
+  // Code blocks (with highlight.js if available)
   s = s.replace(/```(\w*)\r?\n?([\s\S]*?)```/g, (_, lang, code) => {
     const id = pid()
-    ph[id] = `<pre><code${lang ? ` class="language-${lang}"` : ''}>${code.replace(/^\n/, '')}</code></pre>`
+    const raw = code.replace(/^\n/, '')
+    let body = raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    if (window.hljs) {
+      try {
+        body = lang
+          ? window.hljs.highlight(raw, { language: lang, ignoreIllegals: true }).value
+          : window.hljs.highlightAuto(raw).value
+      } catch {}
+    }
+    ph[id] = `<pre><code class="hljs${lang ? ` language-${lang}` : ''}">${body}</code></pre>`
     return id
   })
 
@@ -325,8 +337,16 @@ export default function Zapiski() {
   const [fullscreen, setFullscreen] = useState(false)
   const [flashcardsOdprte, setFlashcardsOdprte] = useState(false)
   const [dragNad, setDragNad] = useState(false)
-  const [aiNalaga, setAiNalaga] = useState(false)
+  const [aiNalaga,      setAiNalaga]      = useState(false)
   const [verzijeOdprte, setVerzijeOdprte] = useState(false)
+  const [chatOdprt,     setChatOdprt]     = useState(false)
+  const [chatSporocila, setChatSporocila] = useState([])
+  const [chatVhod,      setChatVhod]      = useState('')
+  const [fokusNacin,    setFokusNacin]    = useState(false)
+  const [predlogeOdprte, setPredlogeOdprte] = useState(false)
+  const [fcNalaga,      setFcNalaga]      = useState(false)
+  const [chatNalaga,  setChatNalaga]  = useState(false)
+  const chatSpodajRef = useRef(null)
   const debounceRef  = useRef(null)
   const aktivniRef   = useRef(null)
   const novZapisekRef = useRef(null)
@@ -449,7 +469,16 @@ export default function Zapiski() {
       predmet: aktivniPredmet || privzetiPredmet, tagi: [],
     })
     if (nov) {
-      setZapiski(zs => [nov, ...zs])
+      setZapiski(zs => {
+        const novi = [nov, ...zs]
+        // Achievement check
+        odkleniDosezek('prvi_zapisek')
+        if (novi.length >= 5)  odkleniDosezek('5_zapiskov')
+        if (novi.length >= 10) odkleniDosezek('10_zapiskov')
+        if (novi.length >= 25) odkleniDosezek('25_zapiskov')
+        if (novi.length >= 50) odkleniDosezek('50_zapiskov')
+        return novi
+      })
       setAktivni(nov)
       setPredogled(false)
       localStorage.setItem('studyos-zadnji-zapisek', nov._id)
@@ -519,6 +548,29 @@ export default function Zapiski() {
       setAktivni(a => ({ ...a, pripeto: novVal }))
       setZapiski(zs => zs.map(z => z._id === aktivni._id ? { ...z, pripeto: novVal } : z))
       prikaziObvestilo(novVal ? 'Zapisek pripen 📌' : 'Zapisek odpipen', 'uspeh')
+    }
+  }
+
+  async function posljiChatSporocilo(e) {
+    e?.preventDefault()
+    if (!chatVhod.trim() || chatNalaga) return
+    const novoSporocilo = { role: 'user', content: chatVhod.trim() }
+    const posodobljena = [...chatSporocila, novoSporocilo]
+    setChatSporocila(posodobljena)
+    setChatVhod('')
+    setChatNalaga(true)
+    setTimeout(() => chatSpodajRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
+    try {
+      const odgovor = await aiRazgovor(
+        aktivni?.vsebina || '',
+        posodobljena.map(m => ({ role: m.role, content: m.content }))
+      )
+      setChatSporocila(prev => [...prev, { role: 'assistant', content: odgovor }])
+      setTimeout(() => chatSpodajRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
+    } catch (err) {
+      prikaziObvestilo(`AI: ${err.message}`, 'napaka')
+    } finally {
+      setChatNalaga(false)
     }
   }
 
@@ -671,8 +723,21 @@ export default function Zapiski() {
       return 0
     })
 
+  // Fokus način: esc zapre
+  useEffect(() => {
+    if (!fokusNacin) return
+    const h = e => { if (e.key === 'Escape') setFokusNacin(false) }
+    document.body.classList.add('fokus-nacin')
+    window.addEventListener('keydown', h)
+    return () => {
+      document.body.classList.remove('fokus-nacin')
+      window.removeEventListener('keydown', h)
+    }
+  }, [fokusNacin])
+
   return (
-    <div className="zapiski-okvir">
+    <>
+    <div className={`zapiski-okvir${fokusNacin ? ' fokus-nacin-okvir' : ''}`}>
       {/* ── Levi panel ─────────────────────────────────────────────── */}
       <div className="zapiski-levo">
         <div className="zapiski-levo-glava">
@@ -806,10 +871,67 @@ export default function Zapiski() {
                 }
               </button>
 
+              {/* AI chat */}
+              <button
+                className={`gumb-ikona ${chatOdprt ? 'aktiven' : ''}`}
+                onClick={() => { setChatOdprt(o => !o); if (!chatOdprt) setVerzijeOdprte(false) }}
+                title="AI razgovor o zapisku (nastavi API ključ v Nastavitvah)"
+                style={{ color: chatOdprt ? 'var(--vijolicna)' : undefined }}
+              >
+                <i className="ti ti-message-chatbot" />
+              </button>
+
+              {/* Predloge */}
+              <button
+                className="gumb-ikona"
+                onClick={() => setPredlogeOdprte(true)}
+                title="Vstavi predlogo"
+              >
+                <i className="ti ti-template" />
+              </button>
+
+              {/* AI generiraj kartice */}
+              <button
+                className="gumb-ikona"
+                onClick={async () => {
+                  if (!aktivni?.vsebina?.trim()) { prikaziObvestilo('Zapisek je prazen', 'napaka'); return }
+                  setFcNalaga(true)
+                  try {
+                    const txt = await generirajFlashcards(aktivni.vsebina)
+                    if (txt) {
+                      const nova = aktivni.vsebina + '\n\n---\n\n' + txt
+                      setVsebina(nova)
+                      setSprozShranjevanje(true)
+                      odkleniDosezek('ai_povzetek')
+                      prikaziObvestilo('AI kartice generirane in dodane v zapisek ✓', 'uspeh')
+                    }
+                  } catch (e) { prikaziObvestilo(`Napaka: ${e.message}`, 'napaka') }
+                  finally { setFcNalaga(false) }
+                }}
+                title="AI generiraj flashcard kartice"
+                style={{ color: fcNalaga ? 'var(--modra)' : undefined }}
+                disabled={fcNalaga}
+              >
+                {fcNalaga
+                  ? <div className="nalagalnik" style={{ width: 12, height: 12, borderWidth: 2 }} />
+                  : <i className="ti ti-cards" />
+                }
+              </button>
+
+              {/* Fokus način */}
+              <button
+                className={`gumb-ikona ${fokusNacin ? 'aktiven' : ''}`}
+                onClick={() => setFokusNacin(f => !f)}
+                title={fokusNacin ? 'Zapri fokus način (Esc)' : 'Fokus način — celozaslonski urednik'}
+                style={{ color: fokusNacin ? 'var(--zelena)' : undefined }}
+              >
+                <i className={`ti ti-${fokusNacin ? 'minimize' : 'maximize'}`} />
+              </button>
+
               {/* Zgodovina verzij */}
               <button
                 className={`gumb-ikona ${verzijeOdprte ? 'aktiven' : ''}`}
-                onClick={() => setVerzijeOdprte(o => !o)}
+                onClick={() => { setVerzijeOdprte(o => !o); if (!verzijeOdprte) setChatOdprt(false) }}
                 title="Zgodovina verzij"
               >
                 <i className="ti ti-history" />
@@ -848,6 +970,20 @@ export default function Zapiski() {
                 <i className="ti ti-printer" />
               </button>
 
+              {/* Glasovni vnos */}
+              {!predogled && (
+                <GlasovniVnos
+                  onBesedilo={txt => {
+                    const ta = textareaRef.current
+                    const pos = ta ? ta.selectionStart : (aktivni.vsebina || '').length
+                    const star = aktivni.vsebina || ''
+                    const vstavek = star ? ` ${txt}` : txt
+                    spremeniPolje('vsebina', star.slice(0, pos) + vstavek + star.slice(pos))
+                  }}
+                  title="Glasovni vnos — diktiranje v zapisek (sl-SI)"
+                />
+              )}
+
               {/* Fullscreen */}
               <button
                 className={`gumb-ikona ${fullscreen ? 'aktiven' : ''}`}
@@ -879,6 +1015,80 @@ export default function Zapiski() {
                 onVstavi={vstavi}
                 onSablona={vstavljSablono}
               />
+            )}
+
+            {/* AI chat panel */}
+            {chatOdprt && (
+              <div className="ai-chat-panel">
+                <div className="ai-chat-glava">
+                  <i className="ti ti-message-chatbot" style={{ color: 'var(--vijolicna)' }} />
+                  <span>AI razgovor — {aktivni.naslov}</span>
+                  <button
+                    className="gumb-ikona"
+                    onClick={() => { setChatSporocila([]); prikaziObvestilo('Pogovor počiščen', 'info') }}
+                    title="Počisti pogovor"
+                    style={{ width: 24, height: 24, marginLeft: 'auto' }}
+                  >
+                    <i className="ti ti-trash" style={{ fontSize: '0.7rem' }} />
+                  </button>
+                  <button className="gumb-ikona" onClick={() => setChatOdprt(false)} style={{ width: 24, height: 24 }}>
+                    <i className="ti ti-x" style={{ fontSize: '0.7rem' }} />
+                  </button>
+                </div>
+
+                <div className="ai-chat-sporocila">
+                  {chatSporocila.length === 0 && (
+                    <div className="ai-chat-intro">
+                      <i className="ti ti-sparkles" style={{ fontSize: '1.5rem', color: 'var(--vijolicna)', marginBottom: 8 }} />
+                      <p>Vprašaj karkoli o tem zapisku.</p>
+                      <div className="ai-chat-predlogi">
+                        {['Razloži mi ključne pojme', 'Napiši testna vprašanja', 'Povzemi v 3 točkah', 'Kaj je najpomembnejše?'].map(p => (
+                          <button key={p} className="ai-chat-predlog" onClick={() => { setChatVhod(p) }}>
+                            {p}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {chatSporocila.map((m, i) => (
+                    <div key={i} className={`ai-chat-balon ${m.role}`}>
+                      {m.role === 'assistant' && (
+                        <div className="ai-chat-avatar"><i className="ti ti-sparkles" /></div>
+                      )}
+                      <div className="ai-chat-vsebina">{m.content}</div>
+                    </div>
+                  ))}
+                  {chatNalaga && (
+                    <div className="ai-chat-balon assistant">
+                      <div className="ai-chat-avatar"><i className="ti ti-sparkles" /></div>
+                      <div className="ai-chat-vsebina ai-chat-tipka">
+                        <span /><span /><span />
+                      </div>
+                    </div>
+                  )}
+                  <div ref={chatSpodajRef} />
+                </div>
+
+                <form onSubmit={posljiChatSporocilo} className="ai-chat-vhod-okvir">
+                  <GlasovniVnos onBesedilo={txt => setChatVhod(v => v ? `${v} ${txt}` : txt)} />
+                  <input
+                    className="ai-chat-vhod"
+                    placeholder="Vprašaj AI o zapisku…"
+                    value={chatVhod}
+                    onChange={e => setChatVhod(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && !e.shiftKey && posljiChatSporocilo(e)}
+                    disabled={chatNalaga}
+                  />
+                  <button
+                    type="submit"
+                    className="gumb gumb-primarni"
+                    style={{ padding: '8px 14px', flexShrink: 0 }}
+                    disabled={!chatVhod.trim() || chatNalaga}
+                  >
+                    <i className="ti ti-send" />
+                  </button>
+                </form>
+              </div>
             )}
 
             {/* Verzije panel */}
@@ -990,5 +1200,20 @@ export default function Zapiski() {
         )}
       </div>
     </div>
+
+    {/* Predloge modal */}
+    {predlogeOdprte && (
+      <PredlogeZapiskov
+        onZapri={() => setPredlogeOdprte(false)}
+        onIzberi={predloga => {
+          setVsebina(predloga.vsebina)
+          setSprozShranjevanje(true)
+          setPredlogeOdprte(false)
+          setPredogled(false)
+          prikaziObvestilo(`Predloga "${predloga.ime}" vstavljena ✓`, 'uspeh')
+        }}
+      />
+    )}
+    </>
   )
 }

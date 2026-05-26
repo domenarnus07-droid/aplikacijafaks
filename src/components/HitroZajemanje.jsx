@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { ustvariZapisek, ustvariNalogo } from '../api.js'
 import { prikaziObvestilo } from '../toast.js'
 import { useApp } from '../App.jsx'
+import GlasovniVnos from './GlasovniVnos.jsx'
 
 const PREDLOGI = [
   'Predavanja iz…', 'Izpit za…', 'Preberi poglavje…',
@@ -78,6 +79,10 @@ export default function HitroZajemanje({ onZapri, onNovZapisek }) {
             placeholder={`${placeholder} (Enter za dodaj)`}
             value={besedilo}
             onChange={e => setBesedilo(e.target.value)}
+          />
+          <GlasovniVnos
+            onBesedilo={txt => setBesedilo(b => b ? `${b} ${txt}` : txt)}
+            style={{ flexShrink: 0 }}
           />
           <button
             type="submit"

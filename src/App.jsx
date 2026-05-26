@@ -7,11 +7,20 @@ import Naloge           from './pages/Naloge.jsx'
 import Nastavitve       from './pages/Nastavitve.jsx'
 import Ocene            from './pages/Ocene.jsx'
 import Statistike       from './pages/Statistike.jsx'
+import GlobalniKviz     from './pages/GlobalniKviz.jsx'
+import Dosezki          from './pages/Dosezki.jsx'
+import Semester         from './pages/Semester.jsx'
 import GlobalnoIskanje  from './components/GlobalnoIskanje.jsx'
 import PomodoroTimer    from './components/PomodoroTimer.jsx'
 import SplashScreen     from './components/SplashScreen.jsx'
 import TipkovneBliznjice from './components/TipkovneBliznjice.jsx'
 import HitroZajemanje   from './components/HitroZajemanje.jsx'
+import PwaNamestitev    from './components/PwaNamestitev.jsx'
+import TedeniskiPregled from './components/TedeniskiPregled.jsx'
+import GlobalniAI      from './components/GlobalniAI.jsx'
+import PwaUpdate       from './components/PwaUpdate.jsx'
+import { odkleniDosezek, DOSEZKI } from './dosezki.js'
+import { preveriPovezavo } from './api.js'
 
 export const AppKontekst = createContext(null)
 export function useApp() { return useContext(AppKontekst) }
@@ -64,6 +73,9 @@ const STRANI = {
   naloge:     { oznaka: 'Naloge',     ikona: 'ti-check',            komponenta: Naloge     },
   ocene:      { oznaka: 'Ocene',      ikona: 'ti-star',             komponenta: Ocene      },
   statistike: { oznaka: 'Statistike', ikona: 'ti-chart-bar',        komponenta: Statistike },
+  kviz:       { oznaka: 'Kviz',       ikona: 'ti-cards',            komponenta: GlobalniKviz },
+  semester:   { oznaka: 'Semester',   ikona: 'ti-timeline',         komponenta: Semester   },
+  dosezki:    { oznaka: 'Dosežki',    ikona: 'ti-trophy',           komponenta: Dosezki    },
   nastavitve: { oznaka: 'Nastavitve', ikona: 'ti-settings',         komponenta: Nastavitve },
 }
 
@@ -71,7 +83,7 @@ const STRANI = {
 function Sidebar({ stran, setStran, temno, setTemno, nalogeBadge,
                    aktivniPredmet, setAktivniPredmet, predmeti,
                    onKlikPredmet, onIskanje, mobilniMenuOdprt, setMobilniMenuOdprt,
-                   vseTagi, aktivniTag, setAktivniTag }) {
+                   vseTagi, aktivniTag, setAktivniTag, onTedenski, jeOnline }) {
   return (
     <>
       {mobilniMenuOdprt && (
@@ -82,6 +94,11 @@ function Sidebar({ stran, setStran, temno, setTemno, nalogeBadge,
         <div className="sidebar-logotip">
           <div className="sidebar-logotip-ikona">🎓</div>
           <span className="sidebar-logotip-besedilo">Study<span className="sidebar-logotip-pika">OS</span></span>
+          <span
+            className="povez-indikator"
+            title={jeOnline === null ? 'Preverjanje...' : jeOnline ? 'Sinhroniziran z oblakom' : 'Lokalni način — brez strežnika'}
+            style={{ background: jeOnline === null ? 'var(--meja)' : jeOnline ? '#22c55e' : '#f59e0b' }}
+          />
           <button className="sidebar-zapri-mobilni" onClick={() => setMobilniMenuOdprt(false)}>
             <i className="ti ti-x" />
           </button>
@@ -101,6 +118,21 @@ function Sidebar({ stran, setStran, temno, setTemno, nalogeBadge,
               {k === 'naloge' && nalogeBadge > 0 && <span className="znacka">{nalogeBadge}</span>}
             </button>
           ))}
+        </div>
+
+        <div className="sidebar-sekcija">
+          <div className="sidebar-sekcija-naslov">Orodja</div>
+          {['kviz', 'semester', 'dosezki'].map(k => (
+            <button key={k} className={`nav-element ${stran === k ? 'aktiven' : ''}`}
+              onClick={() => { setStran(k); setMobilniMenuOdprt(false) }}>
+              <i className={`nav-ikona ti ${STRANI[k].ikona}`} />
+              {STRANI[k].oznaka}
+            </button>
+          ))}
+          <button className="nav-element" onClick={() => { onTedenski(); setMobilniMenuOdprt(false) }}>
+            <i className="nav-ikona ti ti-calendar-week" />
+            Teden. pregled
+          </button>
         </div>
 
         <div className="sidebar-sekcija">
@@ -147,6 +179,7 @@ function Sidebar({ stran, setStran, temno, setTemno, nalogeBadge,
             onClick={() => { setStran('nastavitve'); setMobilniMenuOdprt(false) }}>
             <i className={`nav-ikona ti ${STRANI.nastavitve.ikona}`} />{STRANI.nastavitve.oznaka}
           </button>
+          <PwaNamestitev />
           <button className="tema-preklop" onClick={() => setTemno(t => !t)}>
             <i className={`ti ${temno ? 'ti-moon' : 'ti-sun'}`} />
             {temno ? 'Temni način' : 'Svetli način'}
@@ -184,6 +217,9 @@ export default function App() {
   const [bliznjiceOdprte, setBliznjiceOdprte] = useState(false)
   const [hitroZajem,      setHitroZajem]      = useState(false)
   const [aktivniTag,      setAktivniTag]      = useState(null)
+  const [tedenski,        setTedenski]        = useState(false)
+  const [dosezekPopup,    setDosezekPopup]    = useState(null)
+  const [jeOnline,        setJeOnline]        = useState(null)  // null = preverjanje
   const [vseTagi,         setVseTagi]         = useState(() => {
     try { return JSON.parse(localStorage.getItem('studyos-tagi-cache') || '[]') } catch { return [] }
   })
@@ -194,11 +230,28 @@ export default function App() {
   useEffect(() => {
     document.body.classList.toggle('temno', temno)
     localStorage.setItem('studyos-tema', temno ? 'temno' : 'svetlo')
+    // Switch highlight.js theme
+    const el = document.getElementById('hljs-tema')
+    if (el) el.href = temno
+      ? 'https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark-dimmed.min.css'
+      : 'https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css'
   }, [temno])
 
   useEffect(() => {
     document.title = `${STRANI[stran]?.oznaka ?? 'Pregled'} · StudyOS`
   }, [stran])
+
+  // Preverjanje povezave z backendom
+  useEffect(() => {
+    let aktiven = true
+    const preveri = async () => {
+      const ok = await preveriPovezavo()
+      if (aktiven) setJeOnline(ok)
+    }
+    preveri()
+    const interval = setInterval(preveri, 30000)  // vsako 30s
+    return () => { aktiven = false; clearInterval(interval) }
+  }, [])
 
   // Apply accent color as CSS variable
   useEffect(() => {
@@ -220,6 +273,11 @@ export default function App() {
       if (ctrl && e.key === 'k') { e.preventDefault(); setIskanjeOdprto(o => !o); return }
       if (ctrl && e.shiftKey && (e.key === 'N' || e.key === 'n')) {
         e.preventDefault(); setHitroZajem(o => !o); return
+      }
+      if (ctrl && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
+        e.preventDefault()
+        window.dispatchEvent(new CustomEvent('studyos:toggle-ai'))
+        return
       }
       if (ctrl && e.key === 'n') {
         e.preventDefault(); setStran('zapiski')
@@ -261,6 +319,32 @@ export default function App() {
     const h = () => setStran('nastavitve')
     window.addEventListener('studyos:pojdi-nastavitve', h)
     return () => window.removeEventListener('studyos:pojdi-nastavitve', h)
+  }, [])
+
+  // Dosezek listener
+  useEffect(() => {
+    const h = e => {
+      const def = DOSEZKI.find(d => d.id === e.detail?.id)
+      if (def) {
+        setDosezekPopup(def)
+        setTimeout(() => setDosezekPopup(null), 4000)
+      }
+    }
+    window.addEventListener('studyos:dosezek', h)
+    return () => window.removeEventListener('studyos:dosezek', h)
+  }, [])
+
+  // Ponedeljek: opomni na tedenski pregled
+  useEffect(() => {
+    const danes = new Date()
+    const jeNedelja = danes.getDay() === 0
+    const kljuc = `studyos-pregled-opomnik-${danes.toISOString().slice(0, 10)}`
+    if (jeNedelja && !localStorage.getItem(kljuc)) {
+      setTimeout(() => {
+        setTedenski(true)
+        localStorage.setItem(kljuc, '1')
+      }, 3000)
+    }
   }, [])
 
   function klikPredmet(id) {
@@ -306,10 +390,14 @@ export default function App() {
             vseTagi={vseTagi}
             aktivniTag={aktivniTag}
             setAktivniTag={setAktivniTag}
+            onTedenski={() => setTedenski(true)}
+            jeOnline={jeOnline}
           />
 
           <main className={`glavna-vsebina ${brezOdmika ? 'brez-odmika' : ''}`}>
-            <Komponenta />
+            <div key={stran} className="stran-animacija">
+              <Komponenta />
+            </div>
           </main>
         </div>
 
@@ -333,6 +421,25 @@ export default function App() {
               localStorage.setItem('studyos-zadnji-zapisek', nov._id)
             }}
           />
+        )}
+
+        <PwaUpdate />
+        <GlobalniAI />
+
+        {tedenski && <TedeniskiPregled onZapri={() => setTedenski(false)} />}
+
+        {/* Dosežek popup */}
+        {dosezekPopup && (
+          <div className="dosezek-popup" onClick={() => setDosezekPopup(null)}>
+            <div className="dosezek-popup-ikona">{dosezekPopup.ikona}</div>
+            <div>
+              <div style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--zelena)', marginBottom: 2 }}>
+                Dosežek odklenjen!
+              </div>
+              <div style={{ fontWeight: 700, fontSize: '0.92rem' }}>{dosezekPopup.ime}</div>
+              <div style={{ fontSize: '0.72rem', opacity: 0.8 }}>{dosezekPopup.opis}</div>
+            </div>
+          </div>
         )}
       </AppKontekst.Provider>
     </ToastPonudnik>

@@ -152,8 +152,10 @@ export default function PomodoroTimer() {
         onClick={() => setOdprt(o => !o)}
         title="Pomodoro timer"
       >
-        <i className="ti ti-clock" />
-        {tece && <span className="pomo-gumb-cas">{mm}:{ss}</span>}
+        {tece
+          ? <span className="pomo-gumb-cas">{mm}:{ss}</span>
+          : <i className="ti ti-clock" />
+        }
       </button>
 
       {/* Plošča */}

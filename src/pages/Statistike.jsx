@@ -252,6 +252,98 @@ export default function Statistike() {
           </div>
         </div>
       )}
+
+      {/* Letna heatmap aktivnosti */}
+      {(() => {
+        const aktivnostData = JSON.parse(localStorage.getItem('studyos-aktivnost') || '[]')
+        const pomoDatumi = pomoSesije
+          .filter(s => s.tip === 'fokus')
+          .map(s => s.zacetek ? new Date(s.zacetek).toISOString().slice(0, 10) : null)
+          .filter(Boolean)
+
+        // Merge vse aktivnosti
+        const aktivMap = {}
+        ;[...aktivnostData, ...pomoDatumi].forEach(d => {
+          aktivMap[d] = (aktivMap[d] || 0) + 1
+        })
+
+        if (Object.keys(aktivMap).length === 0) return null
+
+        // Zadnjih 52 tednov = 364 dni + danes
+        const heatDni = []
+        for (let i = 363; i >= 0; i--) {
+          const d = new Date(danes); d.setDate(danes.getDate() - i)
+          heatDni.push(d.toISOString().slice(0, 10))
+        }
+        const maks = Math.max(1, ...heatDni.map(d => aktivMap[d] || 0))
+
+        function barvaIntenziteta(n) {
+          if (n === 0) return 'var(--ozadje3)'
+          const p = n / maks
+          if (p < 0.25) return 'var(--modra)40'
+          if (p < 0.5)  return 'var(--modra)70'
+          if (p < 0.75) return 'var(--modra)aa'
+          return 'var(--modra)'
+        }
+
+        // Group by weeks (columns)
+        const tedni = []
+        for (let i = 0; i < heatDni.length; i += 7) {
+          tedni.push(heatDni.slice(i, i + 7))
+        }
+
+        const skupajAktivnihDni = heatDni.filter(d => aktivMap[d] > 0).length
+        const maxZapored = (() => {
+          let max = 0, cur = 0
+          for (const d of heatDni) { if (aktivMap[d] > 0) { cur++; max = Math.max(max, cur) } else cur = 0 }
+          return max
+        })()
+
+        return (
+          <div className="kartica" style={{ marginBottom: 20 }}>
+            <div className="dash-kartica-naslov">
+              <i className="ti ti-calendar-stats" style={{ color: 'var(--modra)' }} /> Letna aktivnost
+              <span style={{ fontSize: '0.72rem', color: 'var(--besedilo3)', marginLeft: 'auto', fontFamily: 'var(--mono)' }}>
+                {skupajAktivnihDni} aktivnih dni · {maxZapored} max zapored
+              </span>
+            </div>
+            <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
+              <div style={{ display: 'flex', gap: 3, minWidth: 'max-content' }}>
+                {tedni.map((teden, ti) => (
+                  <div key={ti} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    {teden.map(d => {
+                      const n = aktivMap[d] || 0
+                      const jeDanes = d === danesTxt
+                      return (
+                        <div
+                          key={d}
+                          title={`${d}: ${n} aktivnosti`}
+                          style={{
+                            width: 13, height: 13,
+                            borderRadius: 3,
+                            background: barvaIntenziteta(n),
+                            border: jeDanes ? '1.5px solid var(--modra)' : 'none',
+                            boxSizing: 'border-box',
+                            cursor: 'default',
+                            transition: 'background 0.2s',
+                          }}
+                        />
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8, fontSize: '0.68rem', color: 'var(--besedilo3)' }}>
+              <span>Manj</span>
+              {[0, 0.25, 0.5, 0.75, 1].map((p, i) => (
+                <div key={i} style={{ width: 13, height: 13, borderRadius: 3, background: barvaIntenziteta(Math.round(p * maks)) }} />
+              ))}
+              <span>Več</span>
+            </div>
+          </div>
+        )
+      })()}
     </>
   )
 }

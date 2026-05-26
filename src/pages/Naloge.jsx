@@ -4,6 +4,7 @@ import {
 } from '../api.js'
 import { prikaziObvestilo } from '../toast.js'
 import { useApp } from '../App.jsx'
+import { odkleniDosezek } from '../dosezki.js'
 
 const PRIORITETE = [
   { vrednost: 'visoka',  oznaka: '🔴 Visoka' },
@@ -290,20 +291,116 @@ function KolendarskiPogled({ naloge, onIzberiDan }) {
   )
 }
 
+// ── Eisenhower matrika ────────────────────────────────────────────────────────
+function EisenhowerMatrika({ naloge, predmeti, onUredi, onIzbrisi, onPreklopi }) {
+  const danes = new Date(); danes.setHours(0, 0, 0, 0)
+
+  function jeNujno(n) {
+    if (!n.rok) return false
+    const d = new Date(n.rok); d.setHours(0, 0, 0, 0)
+    const diff = Math.round((d - danes) / 86400000)
+    return diff <= 3
+  }
+
+  const KVADRANTI = [
+    {
+      id: 'q1', naslov: 'Naredi takoj', opis: 'Nujno + Pomembno', barva: 'var(--rdeca)',
+      filter: n => !n.opravljeno && jeNujno(n) && n.prioriteta === 'visoka'
+    },
+    {
+      id: 'q2', naslov: 'Načrtuj', opis: 'Ni nujno + Pomembno', barva: 'var(--modra)',
+      filter: n => !n.opravljeno && !jeNujno(n) && n.prioriteta === 'visoka'
+    },
+    {
+      id: 'q3', naslov: 'Delegiraj', opis: 'Nujno + Ni pomembno', barva: 'var(--rumena)',
+      filter: n => !n.opravljeno && jeNujno(n) && n.prioriteta !== 'visoka'
+    },
+    {
+      id: 'q4', naslov: 'Eliminiraj', opis: 'Ni nujno + Ni pomembno', barva: 'var(--zelena)',
+      filter: n => !n.opravljeno && !jeNujno(n) && n.prioriteta !== 'visoka'
+    },
+  ]
+
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, marginBottom: 6, paddingLeft: 4, fontSize: '0.7rem', color: 'var(--besedilo3)', fontWeight: 700 }}>
+        <span>← NUJNO</span>
+        <span>NI NUJNO →</span>
+      </div>
+      <div className="eisenhower-mrezica">
+        {KVADRANTI.map(kv => {
+          const nalogE = naloge.filter(kv.filter)
+          return (
+            <div key={kv.id} className="eisenhower-kvadrant" style={{ borderTopColor: kv.barva }}>
+              <div className="eisenhower-glava">
+                <div>
+                  <span style={{ fontWeight: 700, color: kv.barva, fontSize: '0.85rem', display: 'block' }}>{kv.naslov}</span>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--besedilo3)' }}>{kv.opis}</span>
+                </div>
+                <span className="znacka" style={{ background: kv.barva + '22', color: kv.barva, marginLeft: 'auto', alignSelf: 'flex-start' }}>{nalogE.length}</span>
+              </div>
+              <div className="eisenhower-seznam">
+                {nalogE.map(n => {
+                  const rokInfo = rokBesedilo(n.rok)
+                  const p = predmeti.find(x => x.id === n.predmet)
+                  return (
+                    <div key={n._id} className="eisenhower-naloga">
+                      <button
+                        className="naloga-krogec"
+                        onClick={() => onPreklopi(n)}
+                        title="Označi kot opravljeno"
+                        style={{ width: 20, height: 20, minWidth: 20 }}
+                      />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '0.82rem', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.besedilo}</div>
+                        <div style={{ display: 'flex', gap: 5, marginTop: 2 }}>
+                          {p && <span style={{ fontSize: '0.65rem', color: 'var(--besedilo3)' }}>{p.ikona} {p.ime}</span>}
+                          {rokInfo && <span style={{ fontSize: '0.65rem', color: rokInfo.barva, fontWeight: 600 }}>{rokInfo.besedilo}</span>}
+                        </div>
+                      </div>
+                      <button className="gumb-ikona" onClick={() => onUredi(n)} style={{ width: 24, height: 24 }}>
+                        <i className="ti ti-edit" style={{ fontSize: '0.72rem' }} />
+                      </button>
+                      <button className="gumb-ikona rdeca" onClick={() => onIzbrisi(n._id)} style={{ width: 24, height: 24 }}>
+                        <i className="ti ti-trash" style={{ fontSize: '0.72rem' }} />
+                      </button>
+                    </div>
+                  )
+                })}
+                {nalogE.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--besedilo3)', fontSize: '0.78rem' }}>
+                    <i className="ti ti-checks" style={{ fontSize: '1.6rem', display: 'block', marginBottom: 4, opacity: 0.4 }} />
+                    Prazno
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      <div style={{ marginTop: 10, fontSize: '0.72rem', color: 'var(--besedilo3)', textAlign: 'center' }}>
+        💡 Nujnost = rok v naslednjih 3 dneh · Pomembnost = visoka prioriteta
+      </div>
+    </div>
+  )
+}
+
 // ── Glavna stran ──────────────────────────────────────────────────────────────
 export default function Naloge() {
   const { aktivniPredmet, setNalogeBadge, predmeti } = useApp()
-  const [naloge,    setNaloge]    = useState([])
-  const [nalaga,    setNalaga]    = useState(true)
-  const [filter,    setFilter]    = useState('vse')
-  const [novoBesd,  setNovoBesd]  = useState('')
-  const [novaPrior, setNovaPrior] = useState('srednja')
-  const [urejam,    setUrejam]    = useState(null)
-  const [pogled,    setPogled]    = useState('seznam')  // 'seznam' | 'kanban' | 'koledar'
+  const [naloge,       setNaloge]       = useState([])
+  const [nalaga,       setNalaga]       = useState(true)
+  const [filter,       setFilter]       = useState('vse')
+  const [novoBesd,     setNovoBesd]     = useState('')
+  const [novaPrior,    setNovaPrior]    = useState('srednja')
+  const [urejam,       setUrejam]       = useState(null)
+  const [pogled,       setPogled]       = useState('seznam')  // 'seznam' | 'kanban' | 'koledar' | 'eisenhower'
   const [kolDanNaloge, setKolDanNaloge] = useState(null)
   const [vleceni,      setVleceni]      = useState(null)
   const [nadElementom, setNadElementom] = useState(null)
   const [rucniRed,     setRucniRed]     = useState(false)
+  const [izbrani,      setIzbrani]      = useState(new Set())
+  const [bulkRezim,    setBulkRezim]    = useState(false)
   const vhodRef = useRef(null)
 
   useEffect(() => {
@@ -345,6 +442,20 @@ export default function Naloge() {
   async function preklopi(naloga) {
     const pos = await preklopiOpravljenost(naloga._id, !naloga.opravljeno)
     if (pos) {
+      // Achievement: task completion
+      if (!naloga.opravljeno) {
+        odkleniDosezek('prva_naloga')
+        const opravljene = naloge.filter(n => n.opravljeno).length + 1
+        if (opravljene >= 10)  odkleniDosezek('10_nalog')
+        if (opravljene >= 50)  odkleniDosezek('50_nalog')
+        if (opravljene >= 100) odkleniDosezek('100_nalog')
+        // Rok check
+        if (naloga.rok) {
+          const danes = new Date(); danes.setHours(0,0,0,0)
+          const rok = new Date(naloga.rok); rok.setHours(0,0,0,0)
+          if (rok >= danes) odkleniDosezek('brez_zamude')
+        }
+      }
       let seznam = naloge.map(n => n._id === pos._id ? pos : n)
       if (!naloga.opravljeno && naloga.ponavljanje && naloga.ponavljanje !== 'nikoli') {
         const novRok = naslednjRok(naloga.rok, naloga.ponavljanje)
@@ -377,7 +488,6 @@ export default function Naloge() {
     }
   }
 
-  // Kanban premik med stolpci
   async function premakniNalogo(id, kolona) {
     let podatki = {}
     if (kolona === 'caka')       podatki = { vTeku: false, opravljeno: false }
@@ -412,7 +522,58 @@ export default function Naloge() {
     }
   }
 
-  // Drag & Drop za seznam
+  // ── Bulk operacije ──
+  function toggleIzbrani(id) {
+    setIzbrani(s => {
+      const ns = new Set(s)
+      ns.has(id) ? ns.delete(id) : ns.add(id)
+      return ns
+    })
+  }
+
+  function izberiVse() {
+    if (izbrani.size === filtrirane.length) {
+      setIzbrani(new Set())
+    } else {
+      setIzbrani(new Set(filtrirane.map(n => n._id)))
+    }
+  }
+
+  async function bulkIzbrisi() {
+    if (!izbrani.size) return
+    if (!confirm(`Izbriši ${izbrani.size} nalog${izbrani.size === 1 ? 'o' : 'e'}?`)) return
+    const ids = [...izbrani]
+    await Promise.all(ids.map(id => izbrisiNalogo(id)))
+    const seznam = naloge.filter(n => !izbrani.has(n._id))
+    setNaloge(seznam)
+    posodobiZnacko(seznam)
+    setIzbrani(new Set())
+    setBulkRezim(false)
+    prikaziObvestilo(`Izbrisano ${ids.length} nalog`, 'uspeh')
+  }
+
+  async function bulkOpravi() {
+    if (!izbrani.size) return
+    const ids = [...izbrani]
+    await Promise.all(ids.map(id => preklopiOpravljenost(id, true)))
+    const seznam = naloge.map(n => izbrani.has(n._id) ? { ...n, opravljeno: true } : n)
+    setNaloge(seznam)
+    posodobiZnacko(seznam)
+    setIzbrani(new Set())
+    prikaziObvestilo(`${ids.length} nalog opravljenih ✓`, 'uspeh')
+  }
+
+  async function bulkSpremenPrioritet(prioriteta) {
+    if (!izbrani.size) return
+    const ids = [...izbrani]
+    await Promise.all(ids.map(id => posodobiNalogo(id, { prioriteta })))
+    const seznam = naloge.map(n => izbrani.has(n._id) ? { ...n, prioriteta } : n)
+    setNaloge(seznam)
+    setIzbrani(new Set())
+    prikaziObvestilo(`Prioriteta → ${prioriteta} za ${ids.length} nalog`, 'uspeh')
+  }
+
+  // Drag & Drop
   function onDragStart(e, id) {
     setVleceni(id); e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', id)
@@ -464,18 +625,19 @@ export default function Naloge() {
           <span style={{ fontFamily: 'var(--mono)', fontSize: '0.82rem', color: 'var(--besedilo3)' }}>
             {skupajAktivnih} aktivnih · {vTekuStevilo} v teku · {naloge.filter(n => n.opravljeno).length} opravljenih
           </span>
-          {/* Preklop seznam/kanban/koledar */}
+          {/* Preklop pogledov */}
           <div style={{ display: 'flex', gap: 4 }}>
             {[
-              { k: 'seznam',   ikona: 'ti-list',           oznaka: 'Seznam'  },
-              { k: 'kanban',   ikona: 'ti-layout-columns', oznaka: 'Kanban'  },
-              { k: 'koledar',  ikona: 'ti-calendar-month', oznaka: 'Koledar' },
+              { k: 'seznam',      ikona: 'ti-list',           oznaka: 'Seznam'     },
+              { k: 'kanban',      ikona: 'ti-layout-columns', oznaka: 'Kanban'     },
+              { k: 'koledar',     ikona: 'ti-calendar-month', oznaka: 'Koledar'    },
+              { k: 'eisenhower',  ikona: 'ti-layout-grid',    oznaka: 'Eisenhower' },
             ].map(v => (
               <button
                 key={v.k}
                 className={`gumb ${pogled === v.k ? 'gumb-primarni' : 'gumb-sekundarni'}`}
                 style={{ padding: '7px 12px', fontSize: '0.82rem' }}
-                onClick={() => { setPogled(v.k); setKolDanNaloge(null) }}
+                onClick={() => { setPogled(v.k); setKolDanNaloge(null); setBulkRezim(false); setIzbrani(new Set()) }}
                 title={v.oznaka}
               >
                 <i className={`ti ${v.ikona}`} />
@@ -520,6 +682,17 @@ export default function Naloge() {
         />
       )}
 
+      {/* ── Eisenhower matrika ── */}
+      {pogled === 'eisenhower' && (
+        <EisenhowerMatrika
+          naloge={filtrirane}
+          predmeti={predmeti}
+          onUredi={setUrejam}
+          onIzbrisi={izbrisi}
+          onPreklopi={preklopi}
+        />
+      )}
+
       {/* ── Kalendarski pogled ── */}
       {pogled === 'koledar' && (
         <div className="kartica">
@@ -551,7 +724,7 @@ export default function Naloge() {
       {/* ── Seznam pogled ── */}
       {pogled === 'seznam' && (
         <>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
             <div className="filtri">
               {[
                 { k: 'vse',        oznaka: 'Vse' },
@@ -564,12 +737,22 @@ export default function Naloge() {
                 </button>
               ))}
             </div>
-            {rucniRed && (
-              <button style={{ fontSize: '0.72rem', color: 'var(--besedilo3)', background: 'none', border: 'none', cursor: 'pointer' }}
-                onClick={() => setRucniRed(false)}>
-                <i className="ti ti-arrows-sort" /> Ponastavi vrstni red
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              {rucniRed && (
+                <button style={{ fontSize: '0.72rem', color: 'var(--besedilo3)', background: 'none', border: 'none', cursor: 'pointer' }}
+                  onClick={() => setRucniRed(false)}>
+                  <i className="ti ti-arrows-sort" /> Ponastavi vrstni red
+                </button>
+              )}
+              <button
+                className={`gumb ${bulkRezim ? 'gumb-primarni' : 'gumb-sekundarni'}`}
+                style={{ padding: '5px 12px', fontSize: '0.78rem' }}
+                onClick={() => { setBulkRezim(b => !b); setIzbrani(new Set()) }}
+                title="Skupinska izbira"
+              >
+                <i className="ti ti-checklist" /> Izberi
               </button>
-            )}
+            </div>
           </div>
 
           {nalaga ? (
@@ -581,20 +764,43 @@ export default function Naloge() {
             </div>
           ) : (
             <div className="naloge-seznam">
+              {bulkRezim && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--ozadje2)', borderRadius: 8, marginBottom: 6, fontSize: '0.8rem' }}>
+                  <input
+                    type="checkbox"
+                    checked={izbrani.size === filtrirane.length && filtrirane.length > 0}
+                    onChange={izberiVse}
+                    style={{ width: 15, height: 15, cursor: 'pointer' }}
+                  />
+                  <span style={{ color: 'var(--besedilo2)' }}>
+                    {izbrani.size > 0 ? `${izbrani.size} izbrano` : 'Izberi vse'}
+                  </span>
+                </div>
+              )}
               {filtrirane.map(n => {
                 const rokInfo = rokBesedilo(n.rok)
+                const jeIzbrna = izbrani.has(n._id)
                 return (
                   <div
                     key={n._id}
-                    className={`naloga-element ${n.opravljeno ? 'opravljena' : ''} ${vleceni === n._id ? 'vleci' : ''} ${nadElementom === n._id ? 'nad-elementom' : ''}`}
+                    className={`naloga-element ${n.opravljeno ? 'opravljena' : ''} ${vleceni === n._id ? 'vleci' : ''} ${nadElementom === n._id ? 'nad-elementom' : ''} ${jeIzbrna ? 'bulk-izbrana' : ''}`}
                     style={n.pripeto ? { borderColor: 'var(--modra)', borderWidth: '1.5px' } : {}}
-                    draggable={true}
-                    onDragStart={e => onDragStart(e, n._id)}
-                    onDragOver={e => onDragOver(e, n._id)}
-                    onDrop={e => onDrop(e, n._id)}
+                    draggable={!bulkRezim}
+                    onDragStart={e => !bulkRezim && onDragStart(e, n._id)}
+                    onDragOver={e => !bulkRezim && onDragOver(e, n._id)}
+                    onDrop={e => !bulkRezim && onDrop(e, n._id)}
                     onDragEnd={onDragEnd}
                   >
-                    <i className="ti ti-grip-vertical naloga-vleci-ikona" title="Povleci za premik" />
+                    {bulkRezim ? (
+                      <input
+                        type="checkbox"
+                        checked={jeIzbrna}
+                        onChange={() => toggleIzbrani(n._id)}
+                        style={{ width: 16, height: 16, cursor: 'pointer', flexShrink: 0 }}
+                      />
+                    ) : (
+                      <i className="ti ti-grip-vertical naloga-vleci-ikona" title="Povleci za premik" />
+                    )}
 
                     <button
                       className={`naloga-krogec ${n.opravljeno ? 'oznacen' : ''}`}
@@ -618,7 +824,6 @@ export default function Naloge() {
 
                     <span className="naloga-besedilo">{n.besedilo}</span>
 
-                    {/* Tags */}
                     {(n.tagi || []).length > 0 && (
                       <div style={{ display: 'flex', gap: 4 }}>
                         {(n.tagi || []).slice(0, 2).map(t => (
@@ -639,21 +844,48 @@ export default function Naloge() {
                       )}
                     </div>
 
-                    <button className={`gumb-ikona ${n.pripeto ? 'aktiven' : ''}`} onClick={() => preklopiPripeto(n)} title={n.pripeto ? 'Odpni' : 'Pripni'}>
-                      <i className="ti ti-pin" />
-                    </button>
-                    <button className="gumb-ikona" onClick={() => setUrejam(n)} title="Uredi">
-                      <i className="ti ti-edit" />
-                    </button>
-                    <button className="gumb-ikona rdeca" onClick={() => izbrisi(n._id)} title="Izbriši">
-                      <i className="ti ti-trash" />
-                    </button>
+                    {!bulkRezim && <>
+                      <button className={`gumb-ikona ${n.pripeto ? 'aktiven' : ''}`} onClick={() => preklopiPripeto(n)} title={n.pripeto ? 'Odpni' : 'Pripni'}>
+                        <i className="ti ti-pin" />
+                      </button>
+                      <button className="gumb-ikona" onClick={() => setUrejam(n)} title="Uredi">
+                        <i className="ti ti-edit" />
+                      </button>
+                      <button className="gumb-ikona rdeca" onClick={() => izbrisi(n._id)} title="Izbriši">
+                        <i className="ti ti-trash" />
+                      </button>
+                    </>}
                   </div>
                 )
               })}
             </div>
           )}
         </>
+      )}
+
+      {/* ── Bulk akcijska vrstica ── */}
+      {bulkRezim && izbrani.size > 0 && (
+        <div className="bulk-vrstica">
+          <span className="bulk-stevilo">{izbrani.size} izbranih</span>
+          <button className="bulk-gumb zelena" onClick={bulkOpravi} title="Označi kot opravljeno">
+            <i className="ti ti-check" /> Opravi
+          </button>
+          <div style={{ width: 1, background: 'rgba(255,255,255,0.2)', alignSelf: 'stretch' }} />
+          <span style={{ fontSize: '0.72rem', opacity: 0.7 }}>Prioriteta:</span>
+          {PRIORITETE.map(p => (
+            <button key={p.vrednost} className="bulk-gumb" onClick={() => bulkSpremenPrioritet(p.vrednost)}
+              title={`Nastavi prioriteto: ${p.vrednost}`} style={{ fontSize: '0.78rem' }}>
+              {p.vrednost === 'visoka' ? '🔴' : p.vrednost === 'srednja' ? '🟡' : '🟢'}
+            </button>
+          ))}
+          <div style={{ width: 1, background: 'rgba(255,255,255,0.2)', alignSelf: 'stretch' }} />
+          <button className="bulk-gumb rdeca" onClick={bulkIzbrisi} title="Izbriši izbrane">
+            <i className="ti ti-trash" /> Izbriši
+          </button>
+          <button className="bulk-gumb" onClick={() => { setIzbrani(new Set()); setBulkRezim(false) }} title="Zapri">
+            <i className="ti ti-x" />
+          </button>
+        </div>
       )}
 
       {urejam && (
