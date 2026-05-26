@@ -1,0 +1,17 @@
+{
+  "name": "studyos",
+  "version": "1.0.0",
+  "description": "Personal productivity workspace for university students",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "node server/index.js",
+    "client": "vite",
+    "electron": "electron .",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [],
+  "author": "StudyOS",
+  "license": "ISC"
+}
