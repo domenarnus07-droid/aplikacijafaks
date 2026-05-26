@@ -91,9 +91,19 @@ export default function PomodoroTimer() {
 
   // Poslušaj za zunanji start (Hitra seja)
   useEffect(() => {
-    const h = () => { setOdprt(true); setTece(true) }
+    const h = () => {
+      window.dispatchEvent(new CustomEvent('studyos:fab-odprt', { detail: 'timer' }))
+      setOdprt(true); setTece(true)
+    }
     window.addEventListener('studyos:zacni-pomo', h)
     return () => window.removeEventListener('studyos:zacni-pomo', h)
+  }, [])
+
+  // Mutual exclusion — zapri ta panel, ko se odpre drug FAB
+  useEffect(() => {
+    const h = e => { if (e.detail !== 'timer') setOdprt(false) }
+    window.addEventListener('studyos:fab-odprt', h)
+    return () => window.removeEventListener('studyos:fab-odprt', h)
   }, [])
 
   // Posodobi čase ob spremembi iz Nastavitve
@@ -135,7 +145,7 @@ export default function PomodoroTimer() {
           prikaziObvestilo(`Fokus zaključen! ${IMENA[nasl]} — zdaj!`, 'uspeh')
           // Browser notification
           if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-            new Notification('🍅 Pomodoro — Fokus zaključen!', {
+            new Notification('🍅 Fokus timer — Fokus zaključen!', {
               body: `${IMENA[nasl]} čas! (${cs[nasl]} min)`,
             })
           }
@@ -170,8 +180,11 @@ export default function PomodoroTimer() {
       <button
         className={`pomo-gumb ${tece ? 'tece' : ''}`}
         style={{ '--pomo': barva }}
-        onClick={() => setOdprt(o => !o)}
-        title="Pomodoro timer"
+        onClick={() => {
+          if (!odprt) window.dispatchEvent(new CustomEvent('studyos:fab-odprt', { detail: 'timer' }))
+          setOdprt(o => !o)
+        }}
+        title="Fokus timer"
       >
         {tece
           ? <span className="pomo-gumb-cas">{mm}:{ss}</span>

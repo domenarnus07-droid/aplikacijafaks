@@ -24,8 +24,10 @@ import { preveriPovezavo } from './api.js'
 import Projekti          from './pages/Projekti.jsx'
 import Izpiti            from './pages/Izpiti.jsx'
 import MiselniVzorec     from './pages/MiselniVzorec.jsx'
+import Koledar           from './pages/Koledar.jsx'
 import StudyMusic        from './components/StudyMusic.jsx'
 import HitraSeja         from './components/HitraSeja.jsx'
+import ZivaUra           from './components/ZivaUra.jsx'
 
 export const AppKontekst = createContext(null)
 export function useApp() { return useContext(AppKontekst) }
@@ -85,6 +87,7 @@ const STRANI = {
   projekti:   { oznaka: 'Projekti',   ikona: 'ti-users',            komponenta: Projekti   },
   izpiti:     { oznaka: 'Izpiti',     ikona: 'ti-calendar-event',   komponenta: Izpiti     },
   vzorec:     { oznaka: 'Miselni vzorci', ikona: 'ti-share',        komponenta: MiselniVzorec },
+  koledar:    { oznaka: 'Koledar',    ikona: 'ti-calendar',         komponenta: Koledar    },
 }
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
@@ -141,7 +144,7 @@ function Sidebar({ stran, setStran, temno, setTemno, nalogeBadge,
 
         <div className="sidebar-sekcija">
           <div className="sidebar-sekcija-naslov">Orodja</div>
-          {['kviz', 'semester', 'dosezki', 'projekti', 'vzorec'].map(k => (
+          {['kviz', 'semester', 'dosezki', 'projekti', 'vzorec', 'koledar'].map(k => (
             <button key={k} className={`nav-element ${stran === k ? 'aktiven' : ''}`}
               onClick={() => { setStran(k); setMobilniMenuOdprt(false) }}>
               <i className={`nav-ikona ti ${STRANI[k].ikona}`} />
@@ -354,6 +357,31 @@ export default function App() {
     return () => window.removeEventListener('studyos:dosezek', h)
   }, [])
 
+  // Dnevni opomnik za učenje
+  useEffect(() => {
+    function preveriDnevniOpomnik() {
+      try {
+        const cfg = JSON.parse(localStorage.getItem('studyos-dnevni-opomnik') || '{}')
+        if (!cfg.aktiven || !cfg.ura) return
+        if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+        const kljuc = `studyos-dnevni-${new Date().toISOString().slice(0, 10)}`
+        if (localStorage.getItem(kljuc)) return
+        const [h, m] = cfg.ura.split(':').map(Number)
+        const zdaj = new Date()
+        if (zdaj.getHours() > h || (zdaj.getHours() === h && zdaj.getMinutes() >= m)) {
+          new Notification('📚 Čas za učenje!', {
+            body: 'StudyOS te čaka — odpri in nadaljuj 🎓',
+            icon: '/icon.svg',
+          })
+          localStorage.setItem(kljuc, '1')
+        }
+      } catch {}
+    }
+    preveriDnevniOpomnik()
+    const interval = setInterval(preveriDnevniOpomnik, 60000)
+    return () => clearInterval(interval)
+  }, [])
+
   // Ponedeljek: opomni na tedenski pregled
   useEffect(() => {
     const danes = new Date()
@@ -444,6 +472,7 @@ export default function App() {
           />
         )}
 
+        <ZivaUra />
         <StudyMusic />
         <PwaUpdate />
         <GlobalniAI />

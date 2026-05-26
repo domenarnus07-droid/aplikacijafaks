@@ -30,7 +30,7 @@ const WIDGETI_PRIVZETI = {
 }
 const WIDGET_IMENA = {
   rok: '⏰ Naslednji rok', nadaljuj: '📝 Nadaljuj zapisek', cilji: '🎯 Cilji + Opomba',
-  pomo_graf: '🍅 Pomodoro graf', urnik: '📅 Današnji urnik', naloge: '✅ Aktivne naloge',
+  pomo_graf: '🍅 Fokus timer graf', urnik: '📅 Današnji urnik', naloge: '✅ Aktivne naloge',
   statistike: '📊 Statistike po predmetih', aktivnost: '🟩 Aktivnost heatmap',
   fokus_seznam: '📋 Danes naredim', napredek_predmetov: '🔵 Napredek predmetov',
 }
@@ -632,9 +632,9 @@ export default function Dashboard() {
     .filter(p => p.zapiskov > 0 || p.nalog > 0 || p.ur > 0)
 
   return (
-    <>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* Glava */}
-      <div className="stran-glava" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
+      <div className="stran-glava" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4, marginBottom: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', width: '100%', justifyContent: 'space-between' }}>
           <div>
             <h1 className="stran-naslov">{pozdrav()}</h1>
@@ -701,7 +701,7 @@ export default function Dashboard() {
 
       {/* Odštevalnik roka */}
       {widgeti.rok && naslednjRok && (
-        <div className="kartica" style={{ marginBottom: 0 }}>
+        <div className="kartica">
           <div className="dash-kartica-naslov">
             <i className="ti ti-alarm" style={{ color: 'var(--rdeca)' }} />
             Naslednji rok
@@ -714,7 +714,7 @@ export default function Dashboard() {
       {widgeti.nadaljuj && zadnjiZapisek && (
         <div
           className="kartica dash-nadaljuj"
-          style={{ marginBottom: 0, cursor: 'pointer' }}
+          style={{ cursor: 'pointer' }}
           onClick={() => setStran('zapiski')}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
@@ -739,7 +739,7 @@ export default function Dashboard() {
 
       {/* Cilji + Sticky */}
       {widgeti.cilji && (
-        <div className="dash-mrezica-2" style={{ marginBottom: 0 }}>
+        <div className="dash-mrezica-2">
           <CiljiWidget />
           <StickyNote />
         </div>
@@ -873,6 +873,9 @@ export default function Dashboard() {
           <AktivnostMreza zapiski={zapiski} naloge={naloge} />
         </div>
       )}
-    </>
+
+      {/* Spacer at bottom */}
+      <div style={{ height: 8 }} />
+    </div>
   )
 }

@@ -179,7 +179,7 @@ export default function HitraSeja({ onZapri, onZacniPomo, onOdpriZapiske }) {
               if (onZacniPomo) onZacniPomo()
             }}
           >
-            <i className="ti ti-player-play" /> Začni Pomodoro
+            <i className="ti ti-player-play" /> Začni fokus timer
           </button>
         </div>
       </div>

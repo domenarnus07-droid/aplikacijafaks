@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { prikaziObvestilo } from '../toast.js'
 import { useApp } from '../App.jsx'
+import { aiNacrtUcenja } from '../api.js'
 
 const KLJUC = 'studyos-izpiti'
 
@@ -29,11 +30,55 @@ function barvaOdstevanja(dni) {
   return 'var(--zelena)'
 }
 
+function AiNacrtModal({ izpit, predmeti, onZapri }) {
+  const pred = predmeti.find(p => p.id === izpit.predmet)
+  const [nacrt, setNacrt]   = useState('')
+  const [nalaga, setNalaga] = useState(true)
+
+  useEffect(() => {
+    aiNacrtUcenja(izpit, pred?.ime || '')
+      .then(setNacrt)
+      .catch(e => setNacrt(`**Napaka:** ${e.message}`))
+      .finally(() => setNalaga(false))
+  }, [])
+
+  return (
+    <div className="modal-ozadje" onClick={e => e.target === e.currentTarget && onZapri()}>
+      <div className="modal" style={{ maxWidth: 620, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <div>
+            <div className="modal-naslov" style={{ margin: 0 }}>🗓️ AI učni načrt</div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--besedilo3)', marginTop: 3 }}>{izpit.naziv}</div>
+          </div>
+          <button className="gumb-ikona" onClick={onZapri}><i className="ti ti-x" /></button>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', paddingRight: 4 }}>
+          {nalaga
+            ? <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><div className="nalagalnik" /></div>
+            : <div
+                className="predogled-vsebina"
+                style={{ fontSize: '0.88rem', lineHeight: 1.7 }}
+                dangerouslySetInnerHTML={{ __html: nacrt.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br/>').replace(/## (.+)/g, '<h3>$1</h3>').replace(/- (.+)/g, '<li>$1</li>') }}
+              />
+          }
+        </div>
+        <div className="modal-dno">
+          <button className="gumb gumb-sekundarni" onClick={() => { navigator.clipboard?.writeText(nacrt); prikaziObvestilo('Kopirano', 'uspeh') }}>
+            <i className="ti ti-copy" /> Kopiraj
+          </button>
+          <button className="gumb gumb-primarni" onClick={onZapri}>Zapri</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function IzpitKartica({ izpit, predmeti, onPreklopi, onIzbrisi }) {
   const pred = predmeti.find(p => p.id === izpit.predmet)
   const dni = steviloDni(izpit.datum)
   const jeDanes = dni === 0
   const jeKmalu = dni !== null && dni >= 0 && dni < 7
+  const [nacrtOdprt, setNacrtOdprt] = useState(false)
 
   return (
     <div
@@ -97,10 +142,21 @@ function IzpitKartica({ izpit, predmeti, onPreklopi, onIzbrisi }) {
             {izpit.opravljeno ? '✓ Opravljeno' : 'Označi kot opravljeno'}
           </span>
         </label>
+        {!izpit.opravljeno && (
+          <button
+            className="gumb gumb-sekundarni"
+            style={{ fontSize: '0.75rem', padding: '5px 10px', gap: 5 }}
+            onClick={() => setNacrtOdprt(true)}
+            title="AI učni načrt do izpita"
+          >
+            <i className="ti ti-sparkles" style={{ color: 'var(--vijolicna)' }} /> AI načrt
+          </button>
+        )}
         <button className="gumb-ikona rdeca" onClick={() => onIzbrisi(izpit._id)}>
           <i className="ti ti-trash" style={{ fontSize: '0.75rem' }} />
         </button>
       </div>
+      {nacrtOdprt && <AiNacrtModal izpit={izpit} predmeti={predmeti} onZapri={() => setNacrtOdprt(false)} />}
     </div>
   )
 }

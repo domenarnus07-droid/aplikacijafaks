@@ -20,11 +20,11 @@ export const DOSEZKI = [
   { id: 'brez_zamude',     ikona: '⏰', ime: 'Točni',            opis: 'Opravi nalogo pred rokom',           kategorija: 'naloge',   redkost: 'navaden'  },
 
   // Pomodoro
-  { id: 'prva_pomo',       ikona: '🍅', ime: 'Začetnik',         opis: 'Zaključi prvo Pomodoro sejo',        kategorija: 'focus',    redkost: 'navaden'  },
-  { id: '10_pomo',         ikona: '🔥', ime: 'Fokusiran',        opis: 'Zaključi 10 Pomodoro sej',           kategorija: 'focus',    redkost: 'navaden'  },
-  { id: '50_pomo',         ikona: '🌊', ime: 'V pretoku',        opis: 'Zaključi 50 Pomodoro sej',           kategorija: 'focus',    redkost: 'redek'    },
-  { id: '100_pomo',        ikona: '🧘', ime: 'Mojster fokusa',   opis: 'Zaključi 100 Pomodoro sej',          kategorija: 'focus',    redkost: 'epski'    },
-  { id: '4_pomo_dan',      ikona: '⚡', ime: 'Sprint',           opis: 'Naredi 4 Pomodoro seje v enem dnevu', kategorija: 'focus',   redkost: 'redek'    },
+  { id: 'prva_pomo',       ikona: '🍅', ime: 'Začetnik',         opis: 'Zaključi prvo fokus sejo',           kategorija: 'focus',    redkost: 'navaden'  },
+  { id: '10_pomo',         ikona: '🔥', ime: 'Fokusiran',        opis: 'Zaključi 10 fokus sej',              kategorija: 'focus',    redkost: 'navaden'  },
+  { id: '50_pomo',         ikona: '🌊', ime: 'V pretoku',        opis: 'Zaključi 50 fokus sej',              kategorija: 'focus',    redkost: 'redek'    },
+  { id: '100_pomo',        ikona: '🧘', ime: 'Mojster fokusa',   opis: 'Zaključi 100 fokus sej',             kategorija: 'focus',    redkost: 'epski'    },
+  { id: '4_pomo_dan',      ikona: '⚡', ime: 'Sprint',           opis: 'Naredi 4 fokus seje v enem dnevu',  kategorija: 'focus',    redkost: 'redek'    },
 
   // AI
   { id: 'ai_povzetek',     ikona: '🤖', ime: 'AI pomočnik',      opis: 'Ustvari AI povzetek zapiska',        kategorija: 'ai',       redkost: 'navaden'  },

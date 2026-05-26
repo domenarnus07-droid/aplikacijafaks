@@ -314,7 +314,7 @@ function PomodoroNastavitve() {
     const novi = { ...casi, [k]: val }
     setCasi(novi)
     localStorage.setItem(POMO_KLJUC, JSON.stringify(novi))
-    prikaziObvestilo('Pomodoro časi shranjeni', 'uspeh')
+    prikaziObvestilo('Fokus timer časi shranjeni', 'uspeh')
   }
 
   const vrstice = [
@@ -355,6 +355,64 @@ function PomodoroNastavitve() {
         </Vrstica>
       ))}
     </>
+  )
+}
+
+// ── Dnevni opomnik ────────────────────────────────────────────────────────────
+const OPOMNIK_KLJUC = 'studyos-dnevni-opomnik'
+function beriOpomnik() {
+  try { return JSON.parse(localStorage.getItem(OPOMNIK_KLJUC) || '{}') } catch { return {} }
+}
+
+function DnevniOpomnik({ obvestilaDovoljenja }) {
+  const cfg = beriOpomnik()
+  const [aktiven, setAktiven] = useState(cfg.aktiven ?? false)
+  const [ura,     setUra]     = useState(cfg.ura || '08:00')
+
+  function shrani(noviAktiven, novaUra) {
+    const nov = { aktiven: noviAktiven, ura: novaUra }
+    localStorage.setItem(OPOMNIK_KLJUC, JSON.stringify(nov))
+    prikaziObvestilo(noviAktiven ? `Opomnik nastavljen na ${novaUra}` : 'Opomnik izklopljen', 'uspeh')
+  }
+
+  const brezDovoljenja = obvestilaDovoljenja !== 'granted'
+
+  return (
+    <Vrstica
+      opis="Vsak dan ob določeni uri"
+      podnapis={brezDovoljenja ? '⚠️ Najprej dovoli brskalniška obvestila (zgoraj)' : 'Prejmi opomnik "Čas za učenje" vsak dan ob nastavljeni uri'}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <input
+          type="time"
+          className="vhod"
+          style={{ width: 110, fontFamily: 'var(--mono)', fontSize: '1rem' }}
+          value={ura}
+          disabled={brezDovoljenja}
+          onChange={e => {
+            setUra(e.target.value)
+            shrani(aktiven, e.target.value)
+          }}
+        />
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: brezDovoljenja ? 'not-allowed' : 'pointer' }}>
+          <span className="stikalo" onClick={e => e.stopPropagation()}>
+            <input
+              type="checkbox"
+              checked={aktiven && !brezDovoljenja}
+              disabled={brezDovoljenja}
+              onChange={e => {
+                setAktiven(e.target.checked)
+                shrani(e.target.checked, ura)
+              }}
+            />
+            <span className="stikalo-tir" />
+          </span>
+          <span style={{ fontSize: '0.85rem', color: brezDovoljenja ? 'var(--besedilo3)' : 'var(--besedilo1)' }}>
+            {aktiven && !brezDovoljenja ? 'Vklopljeno ✓' : 'Izklopljeno'}
+          </span>
+        </label>
+      </div>
+    </Vrstica>
   )
 }
 
@@ -622,7 +680,7 @@ export default function Nastavitve() {
         </Sekcija>
 
         {/* Pomodoro */}
-        <Sekcija naslov="⏱️  Pomodoro timer — časi">
+        <Sekcija naslov="⏱️  Fokus timer — časi">
           <PomodoroNastavitve />
         </Sekcija>
 
@@ -665,6 +723,11 @@ export default function Nastavitve() {
               </button>
             )}
           </Vrstica>
+        </Sekcija>
+
+        {/* Dnevni opomnik */}
+        <Sekcija naslov="⏰  Dnevni opomnik za učenje">
+          <DnevniOpomnik obvestilaDovoljenja={obvestilaDovoljenja} />
         </Sekcija>
 
         {/* Videz */}

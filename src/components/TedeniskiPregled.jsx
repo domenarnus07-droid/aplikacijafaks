@@ -137,7 +137,7 @@ export default function TedeniskiPregled({ onZapri }) {
                 {[
                   { ikona: '📝', vrednost: novZapiski.length,      oznaka: 'Novih zapiskov' },
                   { ikona: '✅', vrednost: opravljeneNaloge.length, oznaka: 'Nalog opravljenih' },
-                  { ikona: '🍅', vrednost: pomoSeje.length,         oznaka: `Pomodoro (${pomoCasMin} min)` },
+                  { ikona: '🍅', vrednost: pomoSeje.length,         oznaka: `Fokus timer (${pomoCasMin} min)` },
                 ].map((s, i) => (
                   <div key={i} style={{ textAlign: 'center', padding: '14px 10px', background: 'var(--ozadje2)', borderRadius: 12, border: '1px solid var(--rob)' }}>
                     <div style={{ fontSize: '1.4rem' }}>{s.ikona}</div>
@@ -149,7 +149,7 @@ export default function TedeniskiPregled({ onZapri }) {
 
               {/* Aktivnost po dneh */}
               <div style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: '0.82rem', fontWeight: 600, marginBottom: 8, color: 'var(--besedilo2)' }}>Pomodoro po dneh</div>
+                <div style={{ fontSize: '0.82rem', fontWeight: 600, marginBottom: 8, color: 'var(--besedilo2)' }}>Fokus po dneh</div>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', height: 60 }}>
                   {DNI.map((d, i) => (
                     <div key={d} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
@@ -245,7 +245,7 @@ export default function TedeniskiPregled({ onZapri }) {
                 </div>
                 <div style={{ fontSize: '0.82rem', color: 'var(--besedilo2)', lineHeight: 1.7 }}>
                   {nalogeNaslednji.length > 0 && <div>• Opravi {Math.min(nalogeNaslednji.length, 3)} prednostnih nalog z rokom</div>}
-                  <div>• Naredi vsaj {Math.max(3, pomoSeje.length)} Pomodoro sej</div>
+                  <div>• Naredi vsaj {Math.max(3, pomoSeje.length)} fokus sej</div>
                   <div>• Dodaj vsaj 1 nov zapisek</div>
                 </div>
               </div>

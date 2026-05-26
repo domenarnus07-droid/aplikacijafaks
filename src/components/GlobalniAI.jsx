@@ -27,11 +27,30 @@ export default function GlobalniAI() {
 
   // Ctrl+Shift+A toggle
   useEffect(() => {
-    const h = e => { if (e.ctrlKey && e.shiftKey && e.key === 'A') setOdprt(o => !o) }
+    const h = e => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'A') {
+        setOdprt(o => {
+          if (!o) window.dispatchEvent(new CustomEvent('studyos:fab-odprt', { detail: 'ai' }))
+          return !o
+        })
+      }
+    }
     window.addEventListener('keydown', h)
-    const h2 = () => setOdprt(o => !o)
+    const h2 = () => {
+      setOdprt(o => {
+        if (!o) window.dispatchEvent(new CustomEvent('studyos:fab-odprt', { detail: 'ai' }))
+        return !o
+      })
+    }
     window.addEventListener('studyos:toggle-ai', h2)
     return () => { window.removeEventListener('keydown', h); window.removeEventListener('studyos:toggle-ai', h2) }
+  }, [])
+
+  // Mutual exclusion — zapri ta panel, ko se odpre drug FAB
+  useEffect(() => {
+    const h = e => { if (e.detail !== 'ai') setOdprt(false) }
+    window.addEventListener('studyos:fab-odprt', h)
+    return () => window.removeEventListener('studyos:fab-odprt', h)
   }, [])
 
   useEffect(() => {
@@ -107,7 +126,12 @@ export default function GlobalniAI() {
       {/* Floating FAB gumb */}
       <button
         className={`globalni-ai-fab ${odprt ? 'ai-fab-odprt' : ''}`}
-        onClick={() => setOdprt(o => !o)}
+        onClick={() => {
+          setOdprt(o => {
+            if (!o) window.dispatchEvent(new CustomEvent('studyos:fab-odprt', { detail: 'ai' }))
+            return !o
+          })
+        }}
         title="AI asistent (Ctrl+Shift+A)"
       >
         {odprt

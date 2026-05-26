@@ -348,6 +348,7 @@ export default function Zapiski() {
   const [predlogeOdprte, setPredlogeOdprte] = useState(false)
   const [uvozOdprt, setUvozOdprt] = useState(false)
   const [fcNalaga,      setFcNalaga]      = useState(false)
+  const [aktivnaBarva,  setAktivnaBarva]  = useState(null)
   const [chatNalaga,  setChatNalaga]  = useState(false)
   const chatSpodajRef = useRef(null)
   const debounceRef  = useRef(null)
@@ -734,6 +735,7 @@ export default function Zapiski() {
   const filtrirani = zapiski
     .filter(z => !aktivniPredmet || z.predmet === aktivniPredmet)
     .filter(z => !aktivniTag || (z.tagi || []).includes(aktivniTag))
+    .filter(z => !aktivnaBarva || z.barvaOzadja === aktivnaBarva)
     .filter(z => !iskanje || z.naslov.toLowerCase().includes(iskanje.toLowerCase()) ||
                               z.vsebina?.toLowerCase().includes(iskanje.toLowerCase()) ||
                               (z.tagi || []).some(t => t.toLowerCase().includes(iskanje.toLowerCase())))
@@ -772,6 +774,31 @@ export default function Zapiski() {
               </div>
             ) : null
           })()}
+
+          {/* Barvni filter */}
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 6 }}>
+            {BARVE_ZAPISKI.filter(b => b.barva).map(b => (
+              <button
+                key={b.barva}
+                title={b.title}
+                onClick={() => setAktivnaBarva(aktivnaBarva === b.barva ? null : b.barva)}
+                style={{
+                  width: 18, height: 18, borderRadius: '50%', border: 'none', cursor: 'pointer',
+                  background: b.barva,
+                  outline: aktivnaBarva === b.barva ? '2px solid var(--besedilo1)' : '2px solid transparent',
+                  outlineOffset: 1,
+                  flexShrink: 0,
+                }}
+              />
+            ))}
+            {aktivnaBarva && (
+              <button
+                style={{ fontSize: '0.62rem', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--rdeca)', padding: 0, lineHeight: 1 }}
+                onClick={() => setAktivnaBarva(null)}
+                title="Počisti barvni filter"
+              >✕</button>
+            )}
+          </div>
 
           <div className="zapiski-iskanje">
             <i className="ti ti-search iskanje-ikona" />

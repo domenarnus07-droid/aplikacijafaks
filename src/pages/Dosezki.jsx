@@ -128,7 +128,7 @@ export default function Dosezki() {
               {!nalaga && <>
                 <span>📝 {statistike.zapiski} zapiskov</span>
                 <span>✅ {statistike.nalogeDone} nalog</span>
-                <span>🍅 {statistike.pomoSeje} Pomodoro</span>
+                <span>🍅 {statistike.pomoSeje} fokus sej</span>
                 {statistike.streak > 0 && <span>🔥 {statistike.streak} dni streak</span>}
               </>}
             </div>

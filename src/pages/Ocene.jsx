@@ -67,7 +67,7 @@ function OcenaKalkulator({ predmeti }) {
           style={{ background: 'none', border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left', padding: 0 }}
           onClick={() => setOdprt(true)}
         >
-          <i className="ti ti-calculator" style={{ color: 'var(--modra)' }} /> 🧮 Kalkulator ocen
+          🧮 Kalkulator ocen
           <i className="ti ti-chevron-right" style={{ marginLeft: 'auto', fontSize: '0.85rem', color: 'var(--besedilo3)' }} />
         </button>
       </div>
@@ -78,7 +78,7 @@ function OcenaKalkulator({ predmeti }) {
     <div className="kartica oc-kalkulator" style={{ marginTop: 20 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div className="dash-kartica-naslov" style={{ margin: 0 }}>
-          <i className="ti ti-calculator" style={{ color: 'var(--modra)' }} /> 🧮 Kalkulator ocen
+          🧮 Kalkulator ocen
         </div>
         <button className="gumb-ikona" onClick={() => setOdprt(false)}><i className="ti ti-chevron-up" /></button>
       </div>

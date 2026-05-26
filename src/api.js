@@ -281,6 +281,24 @@ export async function povzemiZapisek(vsebina) {
   )
 }
 
+export async function aiNacrtUcenja(izpit, predmetIme) {
+  const danes = new Date().toISOString().slice(0, 10)
+  const dniDo = Math.max(0, Math.round((new Date(izpit.datum) - new Date()) / 86400000))
+  const prompt = `Izpit: **${izpit.naziv}**
+Predmet: ${predmetIme || 'ni določen'}
+Datum izpita: ${izpit.datum} (čez ${dniDo} dni)
+Danes: ${danes}
+${izpit.opomba ? `Opomba: ${izpit.opomba}` : ''}
+
+Sestavi konkreten tedenski načrt učenja od danes do izpita.
+- Razdeli čas na logične tematske sklope
+- Za vsak dan navedi kratko nalogo (1–2 stavka)
+- Zadnji 2 dni: ponavljanje in simulacija
+- Bodi realen — upoštevaj ${dniDo} dni časa
+Odgovarjaj v slovenščini, v obliki markdown.`
+  return await aiKlic('Si mentor za načrtovanje učenja. Odgovarjaj jedrnato in praktično.', [{ role: 'user', content: prompt }], 1500)
+}
+
 export async function generirajFlashcards(vsebina) {
   const prompt = `Iz spodnje vsebine zapiska ustvari 5–10 flashcard kartic v formatu:
 

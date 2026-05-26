@@ -87,6 +87,76 @@ function PodnalogePanel({ nalogaId }) {
   )
 }
 
+// ── Komentarji ────────────────────────────────────────────────────────────────
+function beriKomentarje(nalogaId) {
+  try { return JSON.parse(localStorage.getItem(`studyos-komentarji-${nalogaId}`) || '[]') } catch { return [] }
+}
+function shraniKomentarje(nalogaId, koms) {
+  try { localStorage.setItem(`studyos-komentarji-${nalogaId}`, JSON.stringify(koms)) } catch {}
+}
+function genKomId() { return Math.random().toString(36).slice(2) }
+
+function KomentarjiPanel({ nalogaId }) {
+  const [koms, setKoms] = useState(() => beriKomentarje(nalogaId))
+  const [tekst, setTekst] = useState('')
+
+  function dodaj() {
+    if (!tekst.trim()) return
+    const novi = [...koms, { id: genKomId(), tekst: tekst.trim(), cas: new Date().toISOString() }]
+    setKoms(novi); shraniKomentarje(nalogaId, novi); setTekst('')
+  }
+
+  function izbrisi(id) {
+    const novi = koms.filter(k => k.id !== id)
+    setKoms(novi); shraniKomentarje(nalogaId, novi)
+  }
+
+  function formatCas(iso) {
+    const d = new Date(iso)
+    const danes = new Date()
+    const diffDni = Math.floor((danes - d) / 86400000)
+    if (diffDni === 0) return d.toLocaleTimeString('sl-SI', { hour: '2-digit', minute: '2-digit' })
+    if (diffDni === 1) return 'včeraj'
+    return d.toLocaleDateString('sl-SI', { day: 'numeric', month: 'short' })
+  }
+
+  return (
+    <div className="komentarji-panel">
+      {koms.length > 0 && (
+        <div className="komentarji-seznam">
+          {koms.map(k => (
+            <div key={k.id} className="komentar-vnos">
+              <span style={{ flex: 1, fontSize: '0.8rem', color: 'var(--besedilo2)', lineHeight: 1.4 }}>{k.tekst}</span>
+              <span style={{ fontSize: '0.65rem', color: 'var(--besedilo3)', flexShrink: 0, fontFamily: 'var(--mono)' }}>{formatCas(k.cas)}</span>
+              <button className="gumb-ikona rdeca" style={{ width: 18, height: 18, flexShrink: 0 }} onClick={() => izbrisi(k.id)}>
+                <i className="ti ti-x" style={{ fontSize: '0.55rem' }} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 6, marginTop: koms.length > 0 ? 6 : 0 }}>
+        <input
+          className="vhod"
+          style={{ flex: 1, fontSize: '0.78rem', padding: '4px 8px' }}
+          placeholder="Dodaj komentar… (Enter)"
+          value={tekst}
+          onChange={e => setTekst(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && dodaj()}
+        />
+        <button className="gumb gumb-sekundarni" style={{ padding: '4px 10px', fontSize: '0.78rem' }} onClick={dodaj}>
+          <i className="ti ti-plus" />
+        </button>
+      </div>
+      {koms.length > 0 && (
+        <div style={{ fontSize: '0.68rem', color: 'var(--besedilo3)', marginTop: 4 }}>
+          {koms.length} {koms.length === 1 ? 'komentar' : koms.length < 5 ? 'komentarji' : 'komentarjev'}
+        </div>
+      )}
+    </div>
+  )
+}
+
 const PRIORITETE = [
   { vrednost: 'visoka',  oznaka: '🔴 Visoka' },
   { vrednost: 'srednja', oznaka: '🟡 Srednja' },
@@ -483,10 +553,19 @@ export default function Naloge() {
   const [izbrani,      setIzbrani]      = useState(new Set())
   const [bulkRezim,    setBulkRezim]    = useState(false)
   const [razsirenePodnaloge, setRazsirenePodnaloge] = useState(new Set())
+  const [razsireniKomentarji, setRazsireniKomentarji] = useState(new Set())
   const vhodRef = useRef(null)
 
   function togglePodnaloge(id) {
     setRazsirenePodnaloge(s => {
+      const ns = new Set(s)
+      ns.has(id) ? ns.delete(id) : ns.add(id)
+      return ns
+    })
+  }
+
+  function toggleKomentarji(id) {
+    setRazsireniKomentarji(s => {
       const ns = new Set(s)
       ns.has(id) ? ns.delete(id) : ns.add(id)
       return ns
@@ -946,6 +1025,14 @@ export default function Naloge() {
                       <button className={`gumb-ikona ${n.pripeto ? 'aktiven' : ''}`} onClick={() => preklopiPripeto(n)} title={n.pripeto ? 'Odpni' : 'Pripni'}>
                         <i className="ti ti-pin" />
                       </button>
+                      <button
+                        className={`gumb-ikona ${razsireniKomentarji.has(n._id) ? 'aktiven' : ''}`}
+                        onClick={() => toggleKomentarji(n._id)}
+                        title="Komentarji / dnevnik"
+                        style={{ color: razsireniKomentarji.has(n._id) ? 'var(--rumena)' : undefined }}
+                      >
+                        <i className="ti ti-message" />
+                      </button>
                       <button className="gumb-ikona" onClick={() => setUrejam(n)} title="Uredi">
                         <i className="ti ti-edit" />
                       </button>
@@ -955,6 +1042,7 @@ export default function Naloge() {
                     </>}
                   </div>
                   {razsirenePodnaloge.has(n._id) && <PodnalogePanel nalogaId={n._id} />}
+                  {razsireniKomentarji.has(n._id) && <KomentarjiPanel nalogaId={n._id} />}
                   </React.Fragment>
                 )
               })}

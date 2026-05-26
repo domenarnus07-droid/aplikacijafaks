@@ -117,7 +117,7 @@ export default function Statistike() {
                     <div style={{ display: 'flex', gap: 8, fontSize: '0.7rem', color: 'var(--besedilo3)', marginTop: 2 }}>
                       <span title="Zapiski">📝 {p.zapiskov}</span>
                       {p.nalogStevilo > 0 && <span title="Opravljene naloge">✓ {p.opravljenih}/{p.nalogStevilo}</span>}
-                      {p.pomoMin > 0 && <span title="Pomodoro minute">🍅 {Math.round(p.pomoMin / 60 * 10) / 10}h</span>}
+                      {p.pomoMin > 0 && <span title="Fokus minute">🍅 {Math.round(p.pomoMin / 60 * 10) / 10}h</span>}
                     </div>
                   </div>
                 </div>
@@ -233,7 +233,7 @@ export default function Statistike() {
       {skupajSesij > 0 && (
         <div className="kartica" style={{ marginBottom: 20 }}>
           <div className="dash-kartica-naslov" style={{ justifyContent: 'space-between' }}>
-            <span><i className="ti ti-clock" style={{ color: '#F59E0B' }} /> Pomodoro — zadnjih 14 dni</span>
+            <span><i className="ti ti-clock" style={{ color: '#F59E0B' }} /> Fokus timer — zadnjih 14 dni</span>
             <span style={{ fontSize: '0.72rem', color: 'var(--besedilo3)', fontFamily: 'var(--mono)' }}>
               {skupajFokusMin} min skupaj
             </span>
