@@ -118,13 +118,128 @@ export async function izvleciBesedilo(datoteka) {
   }
 
   if (ime.endsWith('.docx')) {
-    const mammoth = await import('mammoth')
-    // convertToHtml keeps structure (headings, bold, lists, tables)
-    const result = await mammoth.convertToHtml({ arrayBuffer })
-    if (result.messages?.length) {
-      console.info('mammoth warnings:', result.messages.map(m => m.message))
+    const JSZip = (await import('jszip')).default
+    const zip   = await JSZip.loadAsync(arrayBuffer)
+
+    const xmlFile = zip.files['word/document.xml']
+    if (!xmlFile) throw new Error('Ni veljavna DOCX datoteka')
+    const xmlStr = await xmlFile.async('string')
+    const doc    = new DOMParser().parseFromString(xmlStr, 'text/xml')
+
+    // Word namespace URI
+    const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+
+    // Reliable attribute getter for namespace-prefixed XML attributes
+    const wAttr = (el, name) =>
+      el?.getAttributeNS(W, name) ?? el?.getAttribute('w:' + name) ?? ''
+
+    // All w:X in a subtree by local name
+    const wAll  = (el, name) => Array.from(el.getElementsByTagNameNS(W, name))
+    const wOne  = (el, name) => el.getElementsByTagNameNS(W, name)[0] ?? null
+
+    // ── Text extraction from one w:p, preserving bold/italic ──────────────
+    function paraToMd(p) {
+      // Collect w:r elements that are direct runs of THIS paragraph,
+      // not runs inside a nested table within the paragraph.
+      const runs = wAll(p, 'r').filter(r => {
+        let n = r.parentNode
+        while (n && n !== p) {
+          if (n.localName === 'tc') return false   // inside a table cell → skip
+          n = n.parentNode
+        }
+        return true
+      })
+
+      return runs.map(r => {
+        const tNodes = wAll(r, 't')
+        let txt = tNodes.map(t => t.textContent).join('')
+        if (!txt) return ''
+        const rPr   = wOne(r, 'rPr')
+        const bold  = rPr && wOne(rPr, 'b')  !== null
+        const ital  = rPr && wOne(rPr, 'i')  !== null
+        if (bold && ital) return `***${txt}***`
+        if (bold)         return `**${txt}**`
+        if (ital)         return `*${txt}*`
+        return txt
+      }).join('')
     }
-    return _htmlNaMarkdown(result.value)
+
+    // ── Heading style → Markdown prefix ───────────────────────────────────
+    function headingPrefix(styleId) {
+      if (!styleId) return ''
+      const s = styleId.toLowerCase().replace(/[-_\s]/g, '')
+      if (s === 'heading1' || s === 'naslov1' || s === 'title'    || s === '1') return '# '
+      if (s === 'heading2' || s === 'naslov2' || s === 'subtitle' || s === '2') return '## '
+      if (s === 'heading3' || s === 'naslov3' || s === '3') return '### '
+      if (s === 'heading4' || s === 'naslov4' || s === '4') return '#### '
+      if (s === 'heading5' || s === 'naslov5' || s === '5') return '##### '
+      if (s === 'heading6' || s === 'naslov6' || s === '6') return '###### '
+      return ''
+    }
+
+    // ── Walk body's direct children (w:p and w:tbl) ───────────────────────
+    const bodyEl = wOne(doc, 'body') || doc.documentElement
+    const lines  = []
+
+    Array.from(bodyEl.childNodes).forEach(el => {
+      if (el.nodeType !== 1) return          // skip text/comment nodes
+      const ln = el.localName
+
+      if (ln === 'p') {
+        const pPr     = wOne(el, 'pPr')
+        const pStyle  = pPr ? wOne(pPr, 'pStyle') : null
+        const styleId = pStyle ? wAttr(pStyle, 'val') : ''
+        const prefix  = headingPrefix(styleId)
+
+        // List detection via w:numPr / w:ilvl
+        const numPr  = pPr ? wOne(pPr, 'numPr') : null
+        const ilvlEl = numPr ? wOne(numPr, 'ilvl') : null
+        const depth  = ilvlEl ? parseInt(wAttr(ilvlEl, 'val') || '0', 10) : -1
+
+        const txt = paraToMd(el).trim()
+        if (!txt) { lines.push(''); return }
+
+        if (depth >= 0) {
+          lines.push('  '.repeat(depth) + '- ' + txt)
+        } else if (prefix) {
+          lines.push(prefix + txt)
+          lines.push('')
+        } else {
+          lines.push(txt)
+          lines.push('')
+        }
+
+      } else if (ln === 'tbl') {
+        wAll(el, 'tr').forEach((row, ri) => {
+          // only direct w:tc children of this row
+          const cells = Array.from(row.childNodes)
+            .filter(n => n.nodeType === 1 && n.localName === 'tc')
+            .map(tc =>
+              wAll(tc, 'p')
+                // only paragraphs directly inside this cell (not nested tables)
+                .filter(p => {
+                  let n = p.parentNode
+                  while (n && n !== tc) {
+                    if (n.localName === 'tbl') return false
+                    n = n.parentNode
+                  }
+                  return true
+                })
+                .map(p => paraToMd(p).trim())
+                .filter(Boolean)
+                .join(' ')
+            )
+          lines.push('| ' + cells.join(' | ') + ' |')
+          if (ri === 0) lines.push('| ' + cells.map(() => '---').join(' | ') + ' |')
+        })
+        lines.push('')
+      }
+    })
+
+    return lines
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
   }
 
   if (ime.endsWith('.xlsx') || ime.endsWith('.xls')) {

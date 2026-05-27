@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { prikaziObvestilo } from '../toast.js'
 import { useApp } from '../App.jsx'
 
@@ -10,10 +11,9 @@ function genId() {
     ? crypto.randomUUID()
     : `lok-${Math.random().toString(36).slice(2)}-${Date.now()}`
 }
-function beriLS(k) { try { return JSON.parse(localStorage.getItem(k) || '[]') } catch { return [] } }
-function shraniLS(k, v) { try { localStorage.setItem(k, JSON.stringify(v)) } catch {} }
+function beriLS(k)    { try { return JSON.parse(localStorage.getItem(k) || '[]') } catch { return [] } }
+function shraniLS(k,v) { try { localStorage.setItem(k, JSON.stringify(v)) } catch {} }
 
-// Normalizira člane: "ana bor cene" → ['ana','bor','cene'], ['ana, bor'] → ['ana','bor']
 function normalizirajClane(arr) {
   return arr.flatMap(c =>
     c.includes(',') ? c.split(',').map(x => x.trim()).filter(Boolean)
@@ -21,168 +21,208 @@ function normalizirajClane(arr) {
   )
 }
 
-const BARVE = ['#2563EB','#EF4444','#22C55E','#F59E0B','#8B5CF6','#EC4899','#06B6D4','#F97316']
-
+const BARVE   = ['#2563EB','#EF4444','#22C55E','#F59E0B','#8B5CF6','#EC4899','#06B6D4','#F97316']
 const STOLPCI = [
-  { id: 'todo',        oznaka: '📋 To Do',       barva: 'var(--besedilo3)' },
-  { id: 'v_delu',      oznaka: '🔧 V delu',       barva: 'var(--modra)'    },
-  { id: 'preverjanje', oznaka: '👀 Preverjanje',  barva: 'var(--rumena)'   },
-  { id: 'koncano',     oznaka: '✅ Končano',      barva: 'var(--zelena)'   },
+  { id: 'todo',        oznaka: '📋 To Do',      barva: '#6B7280' },
+  { id: 'v_delu',      oznaka: '🔧 V delu',      barva: '#3B82F6' },
+  { id: 'preverjanje', oznaka: '👀 Preverjanje', barva: '#F59E0B' },
+  { id: 'koncano',     oznaka: '✅ Končano',     barva: '#22C55E' },
 ]
 
-const STOLPEC_BARVE = {
-  todo: '#6B7280', v_delu: '#3B82F6', preverjanje: '#F59E0B', koncano: '#22C55E'
+/* ── Modal z React Portal ──────────────────────────────────────────────── */
+function Modal({ naslov, onZapri, children }) {
+  useEffect(() => {
+    const h = e => { if (e.key === 'Escape') onZapri() }
+    window.addEventListener('keydown', h)
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', h)
+      document.body.style.overflow = ''
+    }
+  }, [onZapri])
+
+  return createPortal(
+    <div onClick={e => e.target === e.currentTarget && onZapri()}
+      style={{
+        position: 'fixed', inset: 0,
+        background: 'rgba(2,8,23,0.75)',
+        backdropFilter: 'blur(6px)',
+        zIndex: 9999,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '20px',
+      }}>
+      <div style={{
+        background: 'var(--ozadje1)',
+        border: '1.5px solid var(--rob)',
+        borderRadius: 16,
+        padding: 28,
+        width: 480,
+        maxWidth: '100%',
+        maxHeight: '90vh',
+        overflowY: 'auto',
+        boxShadow: '0 24px 80px rgba(0,0,0,0.5)',
+      }}>
+        <div style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: 20 }}>
+          {naslov}
+        </div>
+        {children}
+      </div>
+    </div>,
+    document.body
+  )
 }
 
-function NovProjektObrazec({ predmeti, onShrani, onZapri }) {
-  const [ime, setIme] = useState('')
-  const [barva, setBarva] = useState(BARVE[0])
-  const [predmet, setPredmet] = useState(predmeti[0]?.id || '')
-  const [clani, setClani] = useState('')
-
-  function shrani() {
-    if (!ime.trim()) { prikaziObvestilo('Vnesi ime projekta', 'napaka'); return }
-    const claniArr = clani.trim()
-      ? clani.split(',').map(c => c.trim()).filter(Boolean)
-      : []
-    onShrani({ _id: genId(), ime: ime.trim(), barva, predmet, clani: claniArr, ustvarjen: new Date().toISOString() })
-  }
-
+/* ── Vnosno polje wrapper ──────────────────────────────────────────────── */
+function VnosnaVrstica({ oznaka, children }) {
   return (
-    <div className="modal-ozadje" onClick={e => e.target === e.currentTarget && onZapri()}>
-      <div className="modal">
-        <div className="modal-naslov">➕ Nov projekt</div>
-        <div className="vnosna-vrstica">
-          <label className="vnosna-oznaka">Ime projekta</label>
-          <input className="vhod" value={ime} onChange={e => setIme(e.target.value)} placeholder="Skupinski projekt…" autoFocus />
-        </div>
-        <div className="vnosna-vrstica">
-          <label className="vnosna-oznaka">Predmet</label>
-          <select className="vhod izbira" value={predmet} onChange={e => setPredmet(e.target.value)}>
-            {predmeti.map(p => <option key={p.id} value={p.id}>{p.ikona} {p.ime}</option>)}
-          </select>
-        </div>
-        <div className="vnosna-vrstica">
-          <label className="vnosna-oznaka">Barva</label>
-          <div className="barvni-izbirnik">
-            {BARVE.map(b => (
-              <button key={b} className={`barva-gumb ${barva === b ? 'izbrana' : ''}`}
-                style={{ background: b }} onClick={() => setBarva(b)} />
-            ))}
-          </div>
-        </div>
-        <div className="vnosna-vrstica">
-          <label className="vnosna-oznaka">Člani <span style={{ fontWeight: 400, color: 'var(--besedilo3)' }}>(ločeni z vejico)</span></label>
-          <input className="vhod" value={clani} onChange={e => setClani(e.target.value)}
-            placeholder="Ana, Bor, Cene…" />
-          <div style={{ fontSize: '0.72rem', color: 'var(--besedilo3)', marginTop: 4 }}>
-            Primer: <code style={{ fontFamily: 'var(--mono)' }}>Ana, Bor, Cene</code>
-          </div>
-        </div>
-        <div className="modal-dno">
-          <button className="gumb gumb-sekundarni" onClick={onZapri}>Prekliči</button>
-          <button className="gumb gumb-primarni" onClick={shrani}>Ustvari projekt</button>
-        </div>
-      </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+      <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--besedilo3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        {oznaka}
+      </label>
+      {children}
     </div>
   )
 }
 
-function NovaNalogaObrazec({ projektId, stolpec, clani, privzetaOseba, onShrani, onZapri }) {
+/* ── Modal: Nov projekt ────────────────────────────────────────────────── */
+function NovProjektModal({ predmeti, onShrani, onZapri }) {
+  const [ime,    setIme]    = useState('')
+  const [barva,  setBarva]  = useState(BARVE[0])
+  const [predmet,setPredmet]= useState(predmeti[0]?.id || '')
+  const [clani,  setClani]  = useState('')
+
+  function shrani() {
+    if (!ime.trim()) { prikaziObvestilo('Vnesi ime projekta', 'napaka'); return }
+    const claniArr = clani.trim() ? clani.split(',').map(c => c.trim()).filter(Boolean) : []
+    onShrani({ _id: genId(), ime: ime.trim(), barva, predmet, clani: claniArr, ustvarjen: new Date().toISOString() })
+  }
+
+  return (
+    <Modal naslov="➕ Nov projekt" onZapri={onZapri}>
+      <VnosnaVrstica oznaka="Ime projekta">
+        <input className="vhod" value={ime} onChange={e => setIme(e.target.value)}
+          placeholder="Skupinski projekt…" autoFocus onKeyDown={e => e.key === 'Enter' && shrani()} />
+      </VnosnaVrstica>
+
+      <VnosnaVrstica oznaka="Predmet">
+        <select className="vhod" value={predmet} onChange={e => setPredmet(e.target.value)}>
+          {predmeti.map(p => <option key={p.id} value={p.id}>{p.ikona} {p.ime}</option>)}
+        </select>
+      </VnosnaVrstica>
+
+      <VnosnaVrstica oznaka="Barva">
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {BARVE.map(b => (
+            <button key={b} onClick={() => setBarva(b)}
+              style={{
+                width: 28, height: 28, borderRadius: '50%', background: b, border: 'none',
+                cursor: 'pointer', outline: barva === b ? `3px solid ${b}` : 'none',
+                outlineOffset: 2,
+              }}
+            />
+          ))}
+        </div>
+      </VnosnaVrstica>
+
+      <VnosnaVrstica oznaka="Člani (ločeni z vejico)">
+        <input className="vhod" value={clani} onChange={e => setClani(e.target.value)} placeholder="Ana, Bor, Cene…" />
+      </VnosnaVrstica>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
+        <button className="gumb gumb-sekundarni" onClick={onZapri}>Prekliči</button>
+        <button className="gumb gumb-primarni" onClick={shrani}>Ustvari projekt</button>
+      </div>
+    </Modal>
+  )
+}
+
+/* ── Modal: Nova naloga ────────────────────────────────────────────────── */
+function NovaNalogaModal({ projektId, stolpec, clani, privzetaOseba, onShrani, onZapri }) {
   const [ime,       setIme]       = useState('')
-  const [oseba,     setOseba]     = useState(privzetaOseba || (clani.length > 0 ? clani[0] : ''))
+  const [oseba,     setOseba]     = useState(privzetaOseba ?? (clani[0] || ''))
   const [rok,       setRok]       = useState('')
   const [prioriteta,setPrioriteta]= useState('srednja')
   const [status,    setStatus]    = useState(stolpec)
 
   function shrani() {
-    if (!ime.trim()) { prikaziObvestilo('Vnesi ime naloge', 'napaka'); return }
+    if (!ime.trim()) { prikaziObvestilo('Vnesi opis naloge', 'napaka'); return }
     onShrani({ _id: genId(), projektId, ime: ime.trim(), oseba, rok, status, prioriteta })
   }
 
   return (
-    <div className="modal-ozadje" onClick={e => e.target === e.currentTarget && onZapri()}>
-      <div className="modal">
-        <div className="modal-naslov">➕ Nova naloga</div>
-        <div className="vnosna-vrstica">
-          <label className="vnosna-oznaka">Naloga</label>
-          <input className="vhod" value={ime} onChange={e => setIme(e.target.value)}
-            placeholder="Opis naloge…" autoFocus onKeyDown={e => e.key === 'Enter' && shrani()} />
+    <Modal naslov="✚ Nova naloga" onZapri={onZapri}>
+      <VnosnaVrstica oznaka="Naloga *">
+        <input className="vhod" value={ime} onChange={e => setIme(e.target.value)}
+          placeholder="Opis naloge…" autoFocus onKeyDown={e => e.key === 'Enter' && shrani()} />
+      </VnosnaVrstica>
+
+      {clani.length > 0 && (
+        <VnosnaVrstica oznaka="Dodeljena osebi">
+          <select className="vhod" value={oseba} onChange={e => setOseba(e.target.value)}>
+            <option value="">— Nihče —</option>
+            {clani.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </VnosnaVrstica>
+      )}
+
+      <VnosnaVrstica oznaka="Stolpec">
+        <select className="vhod" value={status} onChange={e => setStatus(e.target.value)}>
+          {STOLPCI.map(k => <option key={k.id} value={k.id}>{k.oznaka}</option>)}
+        </select>
+      </VnosnaVrstica>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--besedilo3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Rok</label>
+          <input className="vhod" type="date" value={rok} onChange={e => setRok(e.target.value)} />
         </div>
-        {clani.length > 0 && (
-          <div className="vnosna-vrstica">
-            <label className="vnosna-oznaka">Dodeljena osebi</label>
-            <select className="vhod izbira" value={oseba} onChange={e => setOseba(e.target.value)}>
-              <option value="">— Nihče (splošna naloga) —</option>
-              {clani.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-        )}
-        <div className="vnosna-vrstica">
-          <label className="vnosna-oznaka">Stolpec</label>
-          <select className="vhod izbira" value={status} onChange={e => setStatus(e.target.value)}>
-            {STOLPCI.map(k => <option key={k.id} value={k.id}>{k.oznaka}</option>)}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--besedilo3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Prioriteta</label>
+          <select className="vhod" value={prioriteta} onChange={e => setPrioriteta(e.target.value)}>
+            <option value="visoka">🔴 Visoka</option>
+            <option value="srednja">🟡 Srednja</option>
+            <option value="nizka">🟢 Nizka</option>
           </select>
         </div>
-        <div className="vnosni-par">
-          <div className="vnosna-vrstica">
-            <label className="vnosna-oznaka">Rok</label>
-            <input className="vhod" type="date" value={rok} onChange={e => setRok(e.target.value)} />
-          </div>
-          <div className="vnosna-vrstica">
-            <label className="vnosna-oznaka">Prioriteta</label>
-            <select className="vhod izbira" value={prioriteta} onChange={e => setPrioriteta(e.target.value)}>
-              <option value="visoka">🔴 Visoka</option>
-              <option value="srednja">🟡 Srednja</option>
-              <option value="nizka">🟢 Nizka</option>
-            </select>
-          </div>
-        </div>
-        <div className="modal-dno">
-          <button className="gumb gumb-sekundarni" onClick={onZapri}>Prekliči</button>
-          <button className="gumb gumb-primarni" onClick={shrani}>Dodaj nalogo</button>
-        </div>
       </div>
-    </div>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
+        <button className="gumb gumb-sekundarni" onClick={onZapri}>Prekliči</button>
+        <button className="gumb gumb-primarni" onClick={shrani} disabled={!ime.trim()}>Dodaj nalogo</button>
+      </div>
+    </Modal>
   )
 }
 
-// ── Kanban kartica ─────────────────────────────────────────────────────────────
+/* ── Kanban kartica ────────────────────────────────────────────────────── */
 function KanbanKartica({ n, onIzbrisi, onSpremiStatus }) {
   const barvaP = n.prioriteta === 'visoka' ? '#EF4444' : n.prioriteta === 'nizka' ? '#22C55E' : '#F59E0B'
   return (
-    <div className="kanban-kartica">
+    <div style={{
+      background: 'var(--ozadje1)', border: '1.5px solid var(--rob)', borderRadius: 10,
+      padding: '10px 12px', marginBottom: 8, wordBreak: 'break-word', minWidth: 0,
+    }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: barvaP, flexShrink: 0, marginTop: 4 }} />
         <div style={{ flex: 1 }}>
           <div style={{ fontWeight: 600, fontSize: '0.85rem', lineHeight: 1.3 }}>{n.ime}</div>
-          {n.oseba && (
-            <div style={{ fontSize: '0.7rem', color: 'var(--besedilo3)', marginTop: 3 }}>
-              👤 {n.oseba}
-            </div>
-          )}
-          {n.rok && (
-            <div style={{ fontSize: '0.7rem', color: 'var(--besedilo3)', fontFamily: 'var(--mono)', marginTop: 2 }}>
-              📅 {n.rok}
-            </div>
-          )}
+          {n.oseba && <div style={{ fontSize: '0.7rem', color: 'var(--besedilo3)', marginTop: 2 }}>👤 {n.oseba}</div>}
+          {n.rok   && <div style={{ fontSize: '0.7rem', color: 'var(--besedilo3)', fontFamily: 'var(--mono)', marginTop: 2 }}>📅 {n.rok}</div>}
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: barvaP, display: 'block' }} title={n.prioriteta} />
-          <button className="gumb-ikona rdeca" style={{ width: 18, height: 18 }} onClick={() => onIzbrisi(n._id)}>
-            <i className="ti ti-x" style={{ fontSize: '0.6rem' }} />
-          </button>
-        </div>
+        <button onClick={() => onIzbrisi(n._id)} title="Izbriši"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--rdeca)', fontSize: '0.75rem', padding: 2, opacity: 0.7, lineHeight: 1 }}>
+          ✕
+        </button>
       </div>
-      {/* Premakni v stolpec */}
       <div style={{ display: 'flex', gap: 4, marginTop: 8, flexWrap: 'wrap' }}>
         {STOLPCI.filter(k => k.id !== n.status).map(k => (
           <button key={k.id} onClick={() => onSpremiStatus(n._id, k.id)}
             style={{
               fontSize: '0.6rem', padding: '2px 7px', borderRadius: 6,
-              background: STOLPEC_BARVE[k.id] + '22', border: `1px solid ${STOLPEC_BARVE[k.id]}44`,
-              color: STOLPEC_BARVE[k.id], cursor: 'pointer', fontWeight: 600,
+              background: k.barva + '22', border: `1px solid ${k.barva}44`,
+              color: k.barva, cursor: 'pointer', fontWeight: 600,
             }}>
-            → {k.oznaka.split(' ').slice(1).join(' ') || k.id}
+            → {k.oznaka.split(' ').slice(1).join(' ')}
           </button>
         ))}
       </div>
@@ -190,15 +230,15 @@ function KanbanKartica({ n, onIzbrisi, onSpremiStatus }) {
   )
 }
 
+/* ── Glavna komponenta ─────────────────────────────────────────────────── */
 export default function Projekti() {
   const { predmeti } = useApp()
-  const [projekti,     setProjekti]    = useState(() => beriLS(KLJUC_PROJ))
-  const [naloge,       setNaloge]      = useState(() => beriLS(KLJUC_NAL))
-  const [aktProjekt,   setAktProjekt]  = useState(null)
-  const [novProjObrazec, setNovProjObrazec] = useState(false)
-  const [novaNalogaStolpec, setNovaNalogaStolpec] = useState(null)
-  const [novaNalogaOseba, setNovaNalogaOseba] = useState(null)
-  const [pogled,       setPogled]      = useState('kanban') // 'kanban' | 'osebe'
+  const [projekti,   setProjekti]  = useState(() => beriLS(KLJUC_PROJ))
+  const [naloge,     setNaloge]    = useState(() => beriLS(KLJUC_NAL))
+  const [aktProjekt, setAktProjekt]= useState(null)
+  const [novProjekt, setNovProjekt]= useState(false)
+  const [novaNaloga, setNovaNaloga]= useState(null) // { stolpec, oseba } | null
+  const [pogled,     setPogled]    = useState('kanban')
 
   useEffect(() => {
     if (projekti.length > 0 && !aktProjekt) setAktProjekt(projekti[0])
@@ -207,16 +247,16 @@ export default function Projekti() {
   function dodajProjekt(nov) {
     const novi = [...projekti, nov]
     setProjekti(novi); shraniLS(KLJUC_PROJ, novi)
-    setAktProjekt(nov); setNovProjObrazec(false)
-    prikaziObvestilo('Projekt ustvarjen', 'uspeh')
+    setAktProjekt(nov); setNovProjekt(false)
+    prikaziObvestilo('Projekt ustvarjen ✓', 'uspeh')
   }
 
   function izbrisiProjekt(id) {
-    if (!confirm('Izbriši projekt in vse njegove naloge?')) return
+    if (!confirm('Izbriši projekt in vse naloge?')) return
     const novi = projekti.filter(p => p._id !== id)
-    const noveNaloge = naloge.filter(n => n.projektId !== id)
-    setProjekti(novi); setNaloge(noveNaloge)
-    shraniLS(KLJUC_PROJ, novi); shraniLS(KLJUC_NAL, noveNaloge)
+    const noveN = naloge.filter(n => n.projektId !== id)
+    setProjekti(novi); setNaloge(noveN)
+    shraniLS(KLJUC_PROJ, novi); shraniLS(KLJUC_NAL, noveN)
     setAktProjekt(novi[0] || null)
     prikaziObvestilo('Projekt izbrisan', 'uspeh')
   }
@@ -224,8 +264,8 @@ export default function Projekti() {
   function dodajNalogo(nova) {
     const nove = [...naloge, nova]
     setNaloge(nove); shraniLS(KLJUC_NAL, nove)
-    setNovaNalogaStolpec(null); setNovaNalogaOseba(null)
-    prikaziObvestilo('Naloga dodana', 'uspeh')
+    setNovaNaloga(null)
+    prikaziObvestilo('Naloga dodana ✓', 'uspeh')
   }
 
   function spremiStatus(nalogaId, novStatus) {
@@ -234,64 +274,80 @@ export default function Projekti() {
   }
 
   function izbrisiNalogo(id) {
-    const nove = naloge.filter(n => n._id !== id)
-    setNaloge(nove); shraniLS(KLJUC_NAL, nove)
+    setNaloge(prev => { const n = prev.filter(x => x._id !== id); shraniLS(KLJUC_NAL, n); return n })
   }
 
   const projNaloge = aktProjekt ? naloge.filter(n => n.projektId === aktProjekt._id) : []
-  // Normalizirani člani (kompatibilnost s starim zapisom brez vejic)
   const clani = aktProjekt ? normalizirajClane(aktProjekt.clani || []) : []
 
   return (
-    <>
-      <div className="stran-glava">
+    <div style={{ padding: '32px 36px', height: '100%', overflow: 'auto', boxSizing: 'border-box', width: '100%', maxWidth: '100%' }}>
+
+      {/* Glava */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h1 className="stran-naslov">Skupinski projekti</h1>
-          <p style={{ color: 'var(--besedilo3)', fontSize: '0.875rem', marginTop: 4 }}>
-            Kanban tabla za skupinsko delo
-          </p>
+          <h1 style={{ fontSize: '1.6rem', fontWeight: 800, margin: 0 }}>
+            <i className="ti ti-users" style={{ marginRight: 10, color: 'var(--modra)' }} />
+            Skupinski projekti
+          </h1>
+          <p style={{ color: 'var(--besedilo3)', fontSize: '0.85rem', marginTop: 4 }}>Kanban tabla za skupinsko delo</p>
         </div>
-        <button className="gumb gumb-primarni" onClick={() => setNovProjObrazec(true)}>
+        <button className="gumb gumb-primarni" onClick={() => setNovProjekt(true)}>
           <i className="ti ti-plus" /> Nov projekt
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 20, alignItems: 'start' }}>
-        {/* Levi panel */}
-        <div className="kartica" style={{ padding: '14px' }}>
-          <div style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--besedilo3)', marginBottom: 10 }}>
+      {/* Layout: levi panel + desni panel */}
+      <div style={{ display: 'grid', gridTemplateColumns: '210px 1fr', gap: 20, alignItems: 'start', minWidth: 0, overflow: 'hidden' }}>
+
+        {/* ── Levi panel: seznam projektov ── */}
+        <div style={{ background: 'var(--ozadje2)', borderRadius: 12, border: '1.5px solid var(--rob)', padding: 12, position: 'sticky', top: 0, maxHeight: 'calc(100vh - 120px)', overflowY: 'auto' }}>
+          <div style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--besedilo3)', marginBottom: 10 }}>
             Projekti ({projekti.length})
           </div>
+
           {projekti.length === 0 && (
-            <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--besedilo3)', fontSize: '0.85rem' }}>
+            <div style={{ padding: '16px 0', textAlign: 'center', color: 'var(--besedilo3)', fontSize: '0.82rem' }}>
               Ni projektov
             </div>
           )}
+
           {projekti.map(p => {
             const pred = predmeti.find(pr => pr.id === p.predmet)
-            const claniP = normalizirajClane(p.clani || [])
+            const cL = normalizirajClane(p.clani || [])
+            const aktiven = aktProjekt?._id === p._id
             return (
-              <div key={p._id}
-                className={`projekt-kartica ${aktProjekt?._id === p._id ? 'aktiven' : ''}`}
-                onClick={() => setAktProjekt(p)}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: p.barva, flexShrink: 0 }} />
-                  <span style={{ fontWeight: 600, fontSize: '0.875rem', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <div key={p._id} onClick={() => setAktProjekt(p)}
+                style={{
+                  padding: '10px 10px', borderRadius: 9, marginBottom: 4, cursor: 'pointer',
+                  background: aktiven ? 'var(--modra)' : 'transparent',
+                  color: aktiven ? '#fff' : 'inherit',
+                  border: aktiven ? 'none' : '1px solid transparent',
+                  transition: 'background 0.15s',
+                }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <span style={{ width: 9, height: 9, borderRadius: '50%', background: aktiven ? '#fff' : p.barva, flexShrink: 0 }} />
+                  <span style={{ fontWeight: 600, fontSize: '0.85rem', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {p.ime}
                   </span>
-                  <button className="gumb-ikona rdeca" style={{ width: 20, height: 20, opacity: 0.5 }}
-                    onClick={e => { e.stopPropagation(); izbrisiProjekt(p._id) }}>
-                    <i className="ti ti-trash" style={{ fontSize: '0.65rem' }} />
+                  <button onClick={e => { e.stopPropagation(); izbrisiProjekt(p._id) }}
+                    title="Izbriši projekt"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: aktiven ? '#ffaaaa' : 'var(--rdeca)', fontSize: '0.7rem', padding: 2, opacity: 0.7, lineHeight: 1 }}>
+                    ✕
                   </button>
                 </div>
-                {pred && <div style={{ fontSize: '0.7rem', color: 'var(--besedilo3)', marginTop: 3, paddingLeft: 18 }}>{pred.ikona} {pred.ime}</div>}
-                {claniP.length > 0 && (
-                  <div style={{ display: 'flex', gap: 4, marginTop: 4, paddingLeft: 18, flexWrap: 'wrap' }}>
-                    {claniP.map(c => (
+                {pred && (
+                  <div style={{ fontSize: '0.68rem', marginTop: 2, paddingLeft: 16, opacity: aktiven ? 0.85 : undefined, color: aktiven ? '#fff' : 'var(--besedilo3)' }}>
+                    {pred.ikona} {pred.ime}
+                  </div>
+                )}
+                {cL.length > 0 && (
+                  <div style={{ display: 'flex', gap: 3, marginTop: 4, paddingLeft: 16, flexWrap: 'wrap' }}>
+                    {cL.slice(0, 4).map(c => (
                       <span key={c} style={{
-                        fontSize: '0.62rem', padding: '1px 6px', borderRadius: 99,
-                        background: p.barva + '22', border: `1px solid ${p.barva}44`, color: p.barva, fontWeight: 600,
+                        fontSize: '0.6rem', padding: '1px 5px', borderRadius: 99,
+                        background: aktiven ? 'rgba(255,255,255,0.2)' : p.barva + '22',
+                        color: aktiven ? '#fff' : p.barva, fontWeight: 600,
                       }}>{c}</span>
                     ))}
                   </div>
@@ -301,52 +357,69 @@ export default function Projekti() {
           })}
         </div>
 
-        {/* Desni panel */}
-        {aktProjekt ? (
+        {/* ── Desni panel: kanban ── */}
+        {!aktProjekt ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 60, color: 'var(--besedilo3)' }}>
+            <div style={{ fontSize: '3rem', marginBottom: 12 }}>📋</div>
+            <p>Izberi ali ustvari projekt</p>
+          </div>
+        ) : (
           <div>
-            {/* Glava projekta + pogled toggle */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
-              <div style={{ width: 14, height: 14, borderRadius: '50%', background: aktProjekt.barva }} />
+            {/* Projekt header + toggle */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+              <span style={{ width: 14, height: 14, borderRadius: '50%', background: aktProjekt.barva, flexShrink: 0 }} />
               <span style={{ fontWeight: 700, fontSize: '1.1rem' }}>{aktProjekt.ime}</span>
-              <span style={{ fontSize: '0.75rem', color: 'var(--besedilo3)' }}>{projNaloge.length} nalog</span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--besedilo3)', background: 'var(--ozadje2)', padding: '2px 8px', borderRadius: 99 }}>
+                {projNaloge.length} nalog
+              </span>
               <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-                <button
-                  className={`gumb ${pogled === 'kanban' ? 'gumb-primarni' : 'gumb-sekundarni'}`}
-                  style={{ padding: '6px 12px', fontSize: '0.78rem' }}
-                  onClick={() => setPogled('kanban')}
-                >
-                  <i className="ti ti-layout-columns" /> Kanban
-                </button>
-                {clani.length > 0 && (
-                  <button
-                    className={`gumb ${pogled === 'osebe' ? 'gumb-primarni' : 'gumb-sekundarni'}`}
+                {['kanban','osebe'].map(p => (
+                  (p === 'osebe' && clani.length === 0) ? null :
+                  <button key={p}
+                    className={`gumb ${pogled === p ? 'gumb-primarni' : 'gumb-sekundarni'}`}
                     style={{ padding: '6px 12px', fontSize: '0.78rem' }}
-                    onClick={() => setPogled('osebe')}
-                  >
-                    <i className="ti ti-users" /> Po osebi
+                    onClick={() => setPogled(p)}>
+                    <i className={`ti ${p === 'kanban' ? 'ti-layout-columns' : 'ti-users'}`} />
+                    {p === 'kanban' ? ' Kanban' : ' Po osebi'}
                   </button>
-                )}
+                ))}
               </div>
             </div>
 
-            {/* ── KANBAN POGLED ─────────────────────────────────── */}
+            {/* ── Kanban ── */}
             {pogled === 'kanban' && (
-              <div className="projekt-kanban">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12, alignItems: 'start', overflowX: 'auto', minWidth: 0 }}>
                 {STOLPCI.map(kol => {
                   const kolNaloge = projNaloge.filter(n => n.status === kol.id)
                   return (
-                    <div key={kol.id} className="kanban-stolpec">
-                      <div className="kanban-stolpec-glava">
-                        <span style={{ fontSize: '0.82rem', fontWeight: 700 }}>{kol.oznaka}</span>
-                        <span className="znacka" style={{ background: STOLPEC_BARVE[kol.id] }}>{kolNaloge.length}</span>
+                    <div key={kol.id} style={{ background: 'var(--ozadje2)', borderRadius: 12, border: '1.5px solid var(--rob)', overflow: 'hidden', minWidth: 0, minHeight: 200 }}>
+                      {/* Stolpec glava */}
+                      <div style={{
+                        padding: '10px 14px', borderBottom: '1.5px solid var(--rob)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        background: kol.barva + '15',
+                      }}>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 700 }}>{kol.oznaka}</span>
+                        <span style={{
+                          fontSize: '0.68rem', fontWeight: 700, padding: '1px 7px', borderRadius: 99,
+                          background: kol.barva, color: '#fff',
+                        }}>{kolNaloge.length}</span>
                       </div>
-                      <div className="kanban-kartice">
+                      {/* Kartice */}
+                      <div style={{ padding: '10px 10px 6px' }}>
                         {kolNaloge.map(n => (
                           <KanbanKartica key={n._id} n={n} onIzbrisi={izbrisiNalogo} onSpremiStatus={spremiStatus} />
                         ))}
-                        <button className="kanban-dodaj-gumb"
-                          onClick={() => { setNovaNalogaStolpec(kol.id); setNovaNalogaOseba(null) }}>
-                          <i className="ti ti-plus" /> Dodaj nalogo
+                        <button
+                          onClick={() => setNovaNaloga({ stolpec: kol.id, oseba: null })}
+                          style={{
+                            width: '100%', padding: '7px', borderRadius: 8, fontSize: '0.78rem',
+                            background: 'transparent', border: `1.5px dashed var(--rob)`,
+                            color: 'var(--besedilo3)', cursor: 'pointer', fontWeight: 600,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                            marginTop: 4,
+                          }}>
+                          <i className="ti ti-plus" /> Dodaj
                         </button>
                       </div>
                     </div>
@@ -355,23 +428,20 @@ export default function Projekti() {
               </div>
             )}
 
-            {/* ── POGLED PO OSEBI ───────────────────────────────── */}
+            {/* ── Po osebi ── */}
             {pogled === 'osebe' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {/* Splošne naloge (brez osebe) */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {/* Splošne */}
                 {(() => {
                   const splosne = projNaloge.filter(n => !n.oseba)
                   return (
-                    <div className="kartica" style={{ padding: 16 }}>
+                    <div style={{ background: 'var(--ozadje2)', border: '1.5px solid var(--rob)', borderRadius: 12, padding: 14 }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                        <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>📋 Splošne naloge</div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontSize: '0.72rem', color: 'var(--besedilo3)' }}>{splosne.length}</span>
-                          <button className="gumb gumb-sekundarni" style={{ padding: '4px 10px', fontSize: '0.75rem' }}
-                            onClick={() => { setNovaNalogaStolpec('todo'); setNovaNalogaOseba('') }}>
-                            <i className="ti ti-plus" /> Dodaj
-                          </button>
-                        </div>
+                        <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>📋 Splošne naloge</span>
+                        <button className="gumb gumb-sekundarni" style={{ padding: '4px 10px', fontSize: '0.73rem' }}
+                          onClick={() => setNovaNaloga({ stolpec: 'todo', oseba: '' })}>
+                          <i className="ti ti-plus" /> Dodaj
+                        </button>
                       </div>
                       {splosne.length === 0
                         ? <div style={{ fontSize: '0.8rem', color: 'var(--besedilo3)' }}>Ni splošnih nalog</div>
@@ -381,62 +451,37 @@ export default function Projekti() {
                   )
                 })()}
 
-                {/* Po osebi */}
                 {clani.map(oseba => {
-                  const osebaNaloge = projNaloge.filter(n => n.oseba === oseba)
-                  const opravljene  = osebaNaloge.filter(n => n.status === 'koncano').length
+                  const oN = projNaloge.filter(n => n.oseba === oseba)
+                  const opr = oN.filter(n => n.status === 'koncano').length
                   return (
-                    <div key={oseba} className="kartica" style={{ padding: 16 }}>
+                    <div key={oseba} style={{ background: 'var(--ozadje2)', border: '1.5px solid var(--rob)', borderRadius: 12, padding: 14 }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <div style={{
-                            width: 34, height: 34, borderRadius: '50%',
+                            width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
                             background: aktProjekt.barva + '33', border: `2px solid ${aktProjekt.barva}66`,
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: '0.95rem', fontWeight: 700, color: aktProjekt.barva,
-                          }}>
-                            {oseba[0]?.toUpperCase()}
-                          </div>
+                            fontWeight: 700, color: aktProjekt.barva, fontSize: '0.95rem',
+                          }}>{oseba[0]?.toUpperCase()}</div>
                           <div>
-                            <div style={{ fontWeight: 700, fontSize: '0.92rem' }}>{oseba}</div>
-                            <div style={{ fontSize: '0.7rem', color: 'var(--besedilo3)' }}>
-                              {osebaNaloge.length} nalog · {opravljene} končanih
-                            </div>
+                            <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{oseba}</div>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--besedilo3)' }}>{oN.length} nalog · {opr} končanih</div>
                           </div>
                         </div>
-                        <button
-                          className="gumb gumb-primarni"
-                          style={{ padding: '5px 12px', fontSize: '0.75rem' }}
-                          onClick={() => { setNovaNalogaStolpec('todo'); setNovaNalogaOseba(oseba) }}
-                        >
-                          <i className="ti ti-plus" /> Dodaj nalogi {oseba}
+                        <button className="gumb gumb-primarni" style={{ padding: '5px 12px', fontSize: '0.73rem' }}
+                          onClick={() => setNovaNaloga({ stolpec: 'todo', oseba })}>
+                          <i className="ti ti-plus" /> Dodaj
                         </button>
                       </div>
-
-                      {/* Napredek */}
-                      {osebaNaloge.length > 0 && (
+                      {oN.length > 0 && (
                         <div style={{ height: 4, background: 'var(--ozadje3)', borderRadius: 2, marginBottom: 12, overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: `${Math.round(opravljene / osebaNaloge.length * 100)}%`, background: aktProjekt.barva, borderRadius: 2, transition: 'width 0.3s' }} />
+                          <div style={{ height: '100%', width: `${Math.round(opr / oN.length * 100)}%`, background: aktProjekt.barva, borderRadius: 2, transition: 'width .3s' }} />
                         </div>
                       )}
-
-                      {/* Naloge po stolpcih */}
-                      {osebaNaloge.length === 0
-                        ? <div style={{ fontSize: '0.8rem', color: 'var(--besedilo3)', padding: '4px 0' }}>Ni nalog</div>
-                        : (
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8 }}>
-                            {STOLPCI.map(kol => {
-                              const kNaloge = osebaNaloge.filter(n => n.status === kol.id)
-                              if (kNaloge.length === 0) return null
-                              return (
-                                <div key={kol.id}>
-                                  <div style={{ fontSize: '0.65rem', fontWeight: 700, color: STOLPEC_BARVE[kol.id], marginBottom: 4 }}>{kol.oznaka}</div>
-                                  {kNaloge.map(n => <KanbanKartica key={n._id} n={n} onIzbrisi={izbrisiNalogo} onSpremiStatus={spremiStatus} />)}
-                                </div>
-                              )
-                            })}
-                          </div>
-                        )
+                      {oN.length === 0
+                        ? <div style={{ fontSize: '0.8rem', color: 'var(--besedilo3)' }}>Ni nalog</div>
+                        : oN.map(n => <KanbanKartica key={n._id} n={n} onIzbrisi={izbrisiNalogo} onSpremiStatus={spremiStatus} />)
                       }
                     </div>
                   )
@@ -444,28 +489,23 @@ export default function Projekti() {
               </div>
             )}
           </div>
-        ) : (
-          <div className="prazno-stanje">
-            <div className="prazno-ikona">📋</div>
-            <p>Izberi ali ustvari projekt</p>
-          </div>
         )}
       </div>
 
-      {novProjObrazec && (
-        <NovProjektObrazec predmeti={predmeti} onShrani={dodajProjekt} onZapri={() => setNovProjObrazec(false)} />
+      {/* Modali */}
+      {novProjekt && (
+        <NovProjektModal predmeti={predmeti} onShrani={dodajProjekt} onZapri={() => setNovProjekt(false)} />
       )}
-
-      {novaNalogaStolpec !== null && aktProjekt && (
-        <NovaNalogaObrazec
+      {novaNaloga !== null && aktProjekt && (
+        <NovaNalogaModal
           projektId={aktProjekt._id}
-          stolpec={novaNalogaStolpec}
+          stolpec={novaNaloga.stolpec}
           clani={clani}
-          privzetaOseba={novaNalogaOseba}
+          privzetaOseba={novaNaloga.oseba}
           onShrani={dodajNalogo}
-          onZapri={() => { setNovaNalogaStolpec(null); setNovaNalogaOseba(null) }}
+          onZapri={() => setNovaNaloga(null)}
         />
       )}
-    </>
+    </div>
   )
 }

@@ -108,6 +108,7 @@ function renderMd(raw, wikiZapiski = []) {
   s = s.replace(/__(.+?)__/g,         '<strong>$1</strong>')
   s = s.replace(/_([^_\n]+)_/g,       '<em>$1</em>')
   s = s.replace(/~~(.+?)~~/g,         '<del>$1</del>')
+  s = s.replace(/==(.+?)==/g,         '<mark>$1</mark>')
   s = s.replace(/`([^`]+)`/g,         '<code>$1</code>')
 
   // Wiki links [[Naslov]]
@@ -228,6 +229,7 @@ function MdOrodnaVrstica({ onVstavi, onSablona }) {
     { oznaka: 'B',   pred: '**',  za: '**',  title: 'Krepko (Ctrl+B)'  },
     { oznaka: 'I',   pred: '*',   za: '*',   title: 'Ležeče (Ctrl+I)'  },
     { oznaka: '~~',  pred: '~~',  za: '~~',  title: 'Prečrtano'        },
+    { oznaka: '==',  pred: '==',  za: '==',  title: 'Označi (highlight) ==' },
     null,
     { oznaka: 'H1',  pred: '# ',  za: '',    title: 'Naslov 1',        vrstica: true },
     { oznaka: 'H2',  pred: '## ', za: '',    title: 'Naslov 2',        vrstica: true },
@@ -335,6 +337,9 @@ export default function Zapiski() {
   const [iskanje,   setIskanje]   = useState('')
   const [nalaga,    setNalaga]    = useState(true)
   const [shranjeno, setShranjeno] = useState(false)
+  const [preimenujeId, setPreimenujeId] = useState(null)
+  const [preimenujeNaslov, setPreimenujeNaslov] = useState('')
+  const preimenujeRef = useRef(null)
   const [predogled, setPredogled] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
   const [flashcardsOdprte, setFlashcardsOdprte] = useState(false)
@@ -450,6 +455,28 @@ export default function Zapiski() {
     setZapiski(zs => zs.map(z => z._id === aktivni?._id ? { ...z, [polje]: vrednost } : z))
   }
 
+  async function shraniPreimenovanje(id) {
+    const nov = preimenujeNaslov.trim() || 'Brez naslova'
+    setZapiski(zs => zs.map(z => z._id === id ? { ...z, naslov: nov } : z))
+    if (aktivni?._id === id) {
+      setAktivni(a => {
+        const posod = { ...a, naslov: nov, _spremenjen: false }
+        aktivniRef.current = posod
+        return posod
+      })
+    }
+    setPreimenujeId(null)
+    await posodobiZapisek(id, {
+      naslov: nov,
+      vsebina: zapiski.find(z => z._id === id)?.vsebina || aktivni?.vsebina || '',
+      oznaka: zapiski.find(z => z._id === id)?.oznaka || aktivni?.oznaka || 'splosno',
+      predmet: zapiski.find(z => z._id === id)?.predmet || aktivni?.predmet || '',
+      barvaOzadja: zapiski.find(z => z._id === id)?.barvaOzadja || '',
+      pripeto: !!(zapiski.find(z => z._id === id)?.pripeto),
+      tagi: zapiski.find(z => z._id === id)?.tagi || [],
+    })
+  }
+
   function izberiZapisek(zapisek) {
     clearTimeout(debounceRef.current)
     const cur = aktivniRef.current
@@ -464,6 +491,15 @@ export default function Zapiski() {
     setShranjeno(false)
     setPredogled(false)
     localStorage.setItem('studyos-zadnji-zapisek', zapisek._id)
+    // Nedavno odprto
+    try {
+      const prej = JSON.parse(localStorage.getItem('studyos-nedavni') || '[]')
+      const brez = prej.filter(x => x.id !== zapisek._id)
+      localStorage.setItem('studyos-nedavni', JSON.stringify(
+        [{ id: zapisek._id, naslov: zapisek.naslov }, ...brez].slice(0, 6)
+      ))
+      window.dispatchEvent(new Event('studyos:nedavni-posodobljeni'))
+    } catch {}
   }
 
   async function novZapisek() {
@@ -833,11 +869,35 @@ export default function Zapiski() {
                 key={z._id}
                 className={`zapisek-vnos ${aktivni?._id === z._id ? 'aktiven' : ''}`}
                 style={z.barvaOzadja ? { borderLeft: `3px solid ${z.barvaOzadja}` } : {}}
-                onClick={() => izberiZapisek(z)}
+                onClick={() => preimenujeId !== z._id && izberiZapisek(z)}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   {z.pripeto && <i className="ti ti-pin pin-ikona" />}
-                  <span className="zapisek-vnos-naslov">{z.naslov || 'Brez naslova'}</span>
+                  {preimenujeId === z._id ? (
+                    <input
+                      ref={preimenujeRef}
+                      className="zapisek-vnos-preimeno"
+                      value={preimenujeNaslov}
+                      onChange={e => setPreimenujeNaslov(e.target.value)}
+                      onBlur={() => shraniPreimenovanje(z._id)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') { e.preventDefault(); shraniPreimenovanje(z._id) }
+                        if (e.key === 'Escape') { setPreimenujeId(null) }
+                      }}
+                      onClick={e => e.stopPropagation()}
+                    />
+                  ) : (
+                    <span
+                      className="zapisek-vnos-naslov"
+                      onDoubleClick={e => {
+                        e.stopPropagation()
+                        setPreimenujeId(z._id)
+                        setPreimenujeNaslov(z.naslov || '')
+                        setTimeout(() => { preimenujeRef.current?.select() }, 30)
+                      }}
+                      title="Dvojni klik za preimenovanje"
+                    >{z.naslov || 'Brez naslova'}</span>
+                  )}
                 </div>
                 <div className="zapisek-vnos-spodaj">
                   <span className={`oznaka oznaka-${z.oznaka}`} style={{ fontSize: '0.65rem', padding: '1px 7px' }}>
@@ -951,8 +1011,7 @@ export default function Zapiski() {
                     const txt = await generirajFlashcards(aktivni.vsebina)
                     if (txt) {
                       const nova = aktivni.vsebina + '\n\n---\n\n' + txt
-                      setVsebina(nova)
-                      setSprozShranjevanje(true)
+                      spremeniPolje('vsebina', nova)
                       odkleniDosezek('ai_povzetek')
                       prikaziObvestilo('AI kartice generirane in dodane v zapisek ✓', 'uspeh')
                     }
@@ -1217,7 +1276,7 @@ export default function Zapiski() {
               />
             ) : (
               <div
-                style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+                style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', width: '100%', minWidth: 0 }}
                 onDragOver={onDragOverEditor}
                 onDragLeave={onDragLeaveEditor}
                 onDrop={onDropEditor}
@@ -1272,8 +1331,7 @@ export default function Zapiski() {
       <PredlogeZapiskov
         onZapri={() => setPredlogeOdprte(false)}
         onIzberi={predloga => {
-          setVsebina(predloga.vsebina)
-          setSprozShranjevanje(true)
+          spremeniPolje('vsebina', predloga.vsebina)
           setPredlogeOdprte(false)
           setPredogled(false)
           prikaziObvestilo(`Predloga "${predloga.ime}" vstavljena ✓`, 'uspeh')

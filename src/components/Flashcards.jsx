@@ -1,5 +1,21 @@
 import { useState, useEffect } from 'react'
 
+// Pretvori markdown v čisto berljivo besedilo
+function ocistiMd(txt) {
+  if (!txt) return ''
+  return txt
+    .replace(/#{1,6}\s+/g, '')           // ## naslovi
+    .replace(/\*\*(.+?)\*\*/g, '$1')     // **bold**
+    .replace(/\*(.+?)\*/g, '$1')         // *italic*
+    .replace(/`(.+?)`/g, '$1')           // `koda`
+    .replace(/~~(.+?)~~/g, '$1')         // ~~prečrtano~~
+    .replace(/^[-*+]\s+/gm, '• ')       // - seznam → •
+    .replace(/^\d+\.\s+/gm, '')          // 1. seznam
+    .replace(/\[(.+?)\]\(.+?\)/g, '$1') // [link](url)
+    .replace(/_{1,2}(.+?)_{1,2}/g, '$1')// __bold__
+    .trim()
+}
+
 function parseKartice(vsebina) {
   if (!vsebina) return []
   const lines = vsebina.split('\n')
@@ -203,7 +219,7 @@ export default function Flashcards({ naslov, vsebina, noteId, onZapri }) {
               </div>
               <div className="fc-stran fc-zadaj">
                 <div style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--modra)', marginBottom: 12 }}>ODGOVOR</div>
-                <div className="fc-odgovor">{kartica.o}</div>
+                <div className="fc-odgovor">{ocistiMd(kartica.o)}</div>
               </div>
             </div>
           </div>

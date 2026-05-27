@@ -26,13 +26,14 @@ function slovenskiDatum() {
 const WIDGETI_PRIVZETI = {
   rok: true, nadaljuj: true, cilji: true, pomo_graf: true,
   urnik: true, naloge: true, statistike: true, aktivnost: true,
-  fokus_seznam: true, napredek_predmetov: true,
+  fokus_seznam: true, napredek_predmetov: true, navade: true,
 }
 const WIDGET_IMENA = {
   rok: '⏰ Naslednji rok', nadaljuj: '📝 Nadaljuj zapisek', cilji: '🎯 Cilji + Opomba',
   pomo_graf: '🍅 Fokus timer graf', urnik: '📅 Današnji urnik', naloge: '✅ Aktivne naloge',
   statistike: '📊 Statistike po predmetih', aktivnost: '🟩 Aktivnost heatmap',
   fokus_seznam: '📋 Danes naredim', napredek_predmetov: '🔵 Napredek predmetov',
+  navade: '✅ Dnevne navade',
 }
 
 function beriWidgete() {
@@ -554,6 +555,115 @@ function DashNastavi({ widgeti, onSprememba, onZapri }) {
   )
 }
 
+// ── Habit Tracker ─────────────────────────────────────────────────────────────
+const NAVADE_SEZNAM = [
+  { id: 'ucenje',  ime: 'Učil sem se',       ikona: '📚' },
+  { id: 'zapiski', ime: 'Ponovil zapiske',    ikona: '📝' },
+  { id: 'naloge',  ime: 'Rešil naloge',       ikona: '✅' },
+  { id: 'branje',  ime: 'Prebral gradivo',    ikona: '📖' },
+  { id: 'vadba',   ime: 'Gibanje / sprehod',  ikona: '🏃' },
+]
+
+function HabitTracker() {
+  const danes = new Date().toISOString().slice(0, 10)
+
+  const [stanje, setStanje] = useState(() => {
+    try {
+      const vse = JSON.parse(localStorage.getItem('studyos-navade') || '{}')
+      return vse[danes] || {}
+    } catch { return {} }
+  })
+
+  function preklopi(id) {
+    setStanje(prev => {
+      const novo = { ...prev, [id]: !prev[id] }
+      try {
+        const vse = JSON.parse(localStorage.getItem('studyos-navade') || '{}')
+        vse[danes] = novo
+        // Ohrani samo zadnjih 30 dni
+        const kljuci = Object.keys(vse).sort().slice(-30)
+        const ocisceno = Object.fromEntries(kljuci.map(k => [k, vse[k]]))
+        localStorage.setItem('studyos-navade', JSON.stringify(ocisceno))
+      } catch {}
+      return novo
+    })
+  }
+
+  const opravljenih = NAVADE_SEZNAM.filter(n => stanje[n.id]).length
+  const vseh = NAVADE_SEZNAM.length
+  const odstotek = Math.round((opravljenih / vseh) * 100)
+
+  return (
+    <div className="kartica">
+      <div className="dash-kartica-naslov">
+        <i className="ti ti-checklist" style={{ color: 'var(--zelena)' }} />
+        Dnevne navade
+        <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: 'var(--besedilo3)', fontFamily: 'var(--mono)' }}>
+          {opravljenih}/{vseh}
+        </span>
+      </div>
+
+      {/* Progress bar */}
+      <div style={{ height: 4, background: 'var(--ozadje3)', borderRadius: 4, marginBottom: 12, overflow: 'hidden' }}>
+        <div style={{
+          height: '100%', borderRadius: 4, transition: 'width 0.4s ease',
+          width: `${odstotek}%`,
+          background: opravljenih === vseh ? 'var(--zelena)' : 'var(--modra)',
+        }} />
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+        {NAVADE_SEZNAM.map(n => {
+          const done = !!stanje[n.id]
+          return (
+            <button
+              key={n.id}
+              onClick={() => preklopi(n.id)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '8px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                background: done
+                  ? 'color-mix(in srgb, var(--zelena) 12%, var(--ozadje2))'
+                  : 'var(--ozadje2)',
+                textAlign: 'left', fontFamily: 'inherit',
+                borderLeft: `3px solid ${done ? 'var(--zelena)' : 'var(--rob)'}`,
+                transition: 'all 0.18s ease',
+              }}
+            >
+              <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>{n.ikona}</span>
+              <span style={{
+                flex: 1, fontSize: '0.85rem', color: 'var(--besedilo1)',
+                textDecoration: done ? 'line-through' : 'none',
+                opacity: done ? 0.55 : 1, transition: 'all 0.18s',
+              }}>
+                {n.ime}
+              </span>
+              <div style={{
+                width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                border: `2px solid ${done ? 'var(--zelena)' : 'var(--rob)'}`,
+                background: done ? 'var(--zelena)' : 'transparent',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'all 0.18s',
+              }}>
+                {done && <i className="ti ti-check" style={{ fontSize: '0.65rem', color: 'white' }} />}
+              </div>
+            </button>
+          )
+        })}
+      </div>
+
+      {opravljenih === vseh && (
+        <div style={{
+          textAlign: 'center', padding: '10px 0 2px',
+          fontSize: '0.85rem', color: 'var(--zelena)', fontWeight: 600,
+        }}>
+          🎉 Odličen dan — vse navade opravljene!
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Glavna stran ──────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const { aktivniPredmet, setStran, predmeti } = useApp()
@@ -695,6 +805,9 @@ export default function Dashboard() {
           {streak === 0 ? '💤' : streak < 7 ? '🔥' : streak < 30 ? '🔥🔥' : '🏆'}
         </div>
       </div>
+
+      {/* Dnevne navade */}
+      {widgeti.navade && <HabitTracker />}
 
       {/* Pomodoro tedenski graf */}
       {widgeti.pomo_graf && <PomodoroGraf />}

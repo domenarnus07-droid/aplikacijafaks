@@ -28,6 +28,7 @@ import Koledar           from './pages/Koledar.jsx'
 import StudyMusic        from './components/StudyMusic.jsx'
 import HitraSeja         from './components/HitraSeja.jsx'
 import ZivaUra           from './components/ZivaUra.jsx'
+import Bralnik           from './pages/Bralnik.jsx'
 
 export const AppKontekst = createContext(null)
 export function useApp() { return useContext(AppKontekst) }
@@ -88,13 +89,15 @@ const STRANI = {
   izpiti:     { oznaka: 'Izpiti',     ikona: 'ti-calendar-event',   komponenta: Izpiti     },
   vzorec:     { oznaka: 'Miselni vzorci', ikona: 'ti-share',        komponenta: MiselniVzorec },
   koledar:    { oznaka: 'Koledar',    ikona: 'ti-calendar',         komponenta: Koledar    },
+  bralnik:    { oznaka: 'Bralnik',   ikona: 'ti-bookmarks',        komponenta: Bralnik    },
 }
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 function Sidebar({ stran, setStran, temno, setTemno, nalogeBadge,
                    aktivniPredmet, setAktivniPredmet, predmeti,
                    onKlikPredmet, onIskanje, mobilniMenuOdprt, setMobilniMenuOdprt,
-                   vseTagi, aktivniTag, setAktivniTag, onTedenski, jeOnline, onHitraSeja }) {
+                   vseTagi, aktivniTag, setAktivniTag, onTedenski, jeOnline, onHitraSeja,
+                   nedavniZapiski }) {
   return (
     <>
       {mobilniMenuOdprt && (
@@ -118,6 +121,25 @@ function Sidebar({ stran, setStran, temno, setTemno, nalogeBadge,
         <button className="sidebar-iskanje-gumb" onClick={onIskanje} title="Ctrl+K">
           <i className="ti ti-search" /><span>Iskanje…</span><kbd>Ctrl+K</kbd>
         </button>
+
+        {/* Nedavno odprto */}
+        {nedavniZapiski.length > 0 && (
+          <div className="sidebar-sekcija" style={{ paddingTop: 6 }}>
+            <div className="sidebar-sekcija-naslov">Nedavno</div>
+            {nedavniZapiski.map(z => (
+              <button key={z.id} className="nav-element"
+                onClick={() => {
+                  localStorage.setItem('studyos-zadnji-zapisek', z.id)
+                  setStran('zapiski')
+                  setMobilniMenuOdprt(false)
+                }}
+              >
+                <i className="nav-ikona ti ti-note" />
+                <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{z.naslov}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Hitra seja gumb */}
         <div style={{ padding: '8px 10px 0' }}>
@@ -144,7 +166,7 @@ function Sidebar({ stran, setStran, temno, setTemno, nalogeBadge,
 
         <div className="sidebar-sekcija">
           <div className="sidebar-sekcija-naslov">Orodja</div>
-          {['kviz', 'semester', 'dosezki', 'projekti', 'vzorec', 'koledar'].map(k => (
+          {['kviz', 'semester', 'dosezki', 'projekti', 'vzorec', 'koledar', 'bralnik'].map(k => (
             <button key={k} className={`nav-element ${stran === k ? 'aktiven' : ''}`}
               onClick={() => { setStran(k); setMobilniMenuOdprt(false) }}>
               <i className={`nav-ikona ti ${STRANI[k].ikona}`} />
@@ -249,6 +271,9 @@ export default function App() {
   const [barvaAkcent,     setBarvaAkcent]     = useState(() =>
     localStorage.getItem('studyos-barva-akcent') || '#2563EB'
   )
+  const [nedavniZapiski,  setNedavniZapiski]  = useState(() => {
+    try { return JSON.parse(localStorage.getItem('studyos-nedavni') || '[]') } catch { return [] }
+  })
 
   useEffect(() => {
     document.body.classList.toggle('temno', temno)
@@ -342,6 +367,14 @@ export default function App() {
     const h = () => setStran('nastavitve')
     window.addEventListener('studyos:pojdi-nastavitve', h)
     return () => window.removeEventListener('studyos:pojdi-nastavitve', h)
+  }, [])
+
+  useEffect(() => {
+    const h = () => {
+      try { setNedavniZapiski(JSON.parse(localStorage.getItem('studyos-nedavni') || '[]')) } catch {}
+    }
+    window.addEventListener('studyos:nedavni-posodobljeni', h)
+    return () => window.removeEventListener('studyos:nedavni-posodobljeni', h)
   }, [])
 
   // Dosezek listener
@@ -441,6 +474,7 @@ export default function App() {
             onTedenski={() => setTedenski(true)}
             jeOnline={jeOnline}
             onHitraSeja={() => setHitraSeja(true)}
+            nedavniZapiski={nedavniZapiski}
           />
 
           <main className={`glavna-vsebina ${brezOdmika ? 'brez-odmika' : ''}`}>
@@ -472,7 +506,7 @@ export default function App() {
           />
         )}
 
-        <ZivaUra />
+        {stran !== 'zapiski' && <ZivaUra />}
         <StudyMusic />
         <PwaUpdate />
         <GlobalniAI />
