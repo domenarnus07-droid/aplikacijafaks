@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import {
-  pridobiZapiske, pridobiNaloge, pridobiUrnik, preklopiOpravljenost
+  pridobiZapiske, pridobiNaloge, pridobiUrnik, preklopiOpravljenost, aiRazgovor
 } from '../api.js'
 import { prikaziObvestilo } from '../toast.js'
 import { useApp } from '../App.jsx'
@@ -664,6 +665,176 @@ function HabitTracker() {
   )
 }
 
+// ── Sticky Notes ─────────────────────────────────────────────────────────────
+const STICKY_KLJUC = 'studyos-sticky-notes'
+const STICKY_BARVE = ['#FEF08A','#BBF7D0','#BAE6FD','#FCA5A5','#DDD6FE','#FED7AA']
+
+function beriSticky() { try { return JSON.parse(localStorage.getItem(STICKY_KLJUC) || '[]') } catch { return [] } }
+
+function StickyNotes() {
+  const [notes,    setNotes]    = useState(beriSticky)
+  const [nov,      setNov]      = useState('')
+  const [novBarva, setNovBarva] = useState(STICKY_BARVE[0])
+  const [urediId,  setUrediId]  = useState(null)
+  const [urediTxt, setUrediTxt] = useState('')
+
+  function shrani(seznam) { setNotes(seznam); try { localStorage.setItem(STICKY_KLJUC, JSON.stringify(seznam)) } catch {} }
+
+  function dodaj() {
+    if (!nov.trim()) return
+    shrani([...notes, { id: Date.now(), besedilo: nov.trim(), barva: novBarva, ustvarjen: new Date().toISOString() }])
+    setNov('')
+  }
+
+  function izbrisi(id) { shrani(notes.filter(n => n.id !== id)) }
+
+  function shraniUredi(id) {
+    shrani(notes.map(n => n.id === id ? { ...n, besedilo: urediTxt } : n))
+    setUrediId(null)
+  }
+
+  return (
+    <div className="kartica">
+      <div className="dash-kartica-naslov">
+        <i className="ti ti-notes" style={{ color: '#F59E0B' }} /> Sticky Notes
+      </div>
+
+      {/* Vhod za novo */}
+      <div style={{ display:'flex', gap:8, marginBottom:12, alignItems:'flex-start' }}>
+        <textarea
+          className="vhod"
+          rows={2}
+          placeholder="Dodaj opomnik…"
+          value={nov}
+          onChange={e => setNov(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), dodaj())}
+          style={{ flex:1, resize:'none', fontSize:'0.85rem' }}
+        />
+        <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+          <div style={{ display:'flex', gap:4, flexWrap:'wrap', width:80 }}>
+            {STICKY_BARVE.map(b => (
+              <button key={b} onClick={() => setNovBarva(b)} style={{
+                width:18, height:18, borderRadius:'50%', background:b,
+                border: novBarva === b ? '2px solid var(--besedilo1)' : '1.5px solid transparent',
+                cursor:'pointer', padding:0,
+              }} />
+            ))}
+          </div>
+          <button className="gumb gumb-primarni" style={{ padding:'6px 10px', fontSize:'0.8rem' }} onClick={dodaj}>
+            <i className="ti ti-plus" />
+          </button>
+        </div>
+      </div>
+
+      {/* Prikaz */}
+      {notes.length === 0 ? (
+        <p style={{ color:'var(--besedilo3)', fontSize:'0.82rem', fontStyle:'italic' }}>Ni opomnikov.</p>
+      ) : (
+        <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+          {notes.map(n => (
+            <div key={n.id} style={{
+              background:n.barva, borderRadius:8, padding:'10px 12px',
+              minWidth:120, maxWidth:200, flex:'1 1 120px',
+              position:'relative', boxShadow:'2px 2px 6px rgba(0,0,0,0.12)',
+            }}>
+              {urediId === n.id ? (
+                <>
+                  <textarea autoFocus rows={3} value={urediTxt} onChange={e => setUrediTxt(e.target.value)}
+                    style={{ width:'100%', background:'transparent', border:'none', resize:'none', fontSize:'0.82rem', color:'#1e293b', outline:'none', fontFamily:'inherit' }} />
+                  <div style={{ display:'flex', gap:4, marginTop:4 }}>
+                    <button onClick={() => shraniUredi(n.id)} style={{ fontSize:'0.7rem', background:'#00000020', border:'none', borderRadius:4, padding:'2px 8px', cursor:'pointer' }}>Shrani</button>
+                    <button onClick={() => setUrediId(null)} style={{ fontSize:'0.7rem', background:'transparent', border:'none', cursor:'pointer', color:'#64748b' }}>✕</button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p style={{ fontSize:'0.82rem', color:'#1e293b', margin:0, whiteSpace:'pre-wrap', lineHeight:1.4 }}>{n.besedilo}</p>
+                  <div style={{ display:'flex', gap:4, marginTop:6, justifyContent:'flex-end' }}>
+                    <button onClick={() => { setUrediId(n.id); setUrediTxt(n.besedilo) }} style={{ background:'transparent', border:'none', cursor:'pointer', fontSize:'0.7rem', color:'#64748b' }}>
+                      <i className="ti ti-edit" />
+                    </button>
+                    <button onClick={() => izbrisi(n.id)} style={{ background:'transparent', border:'none', cursor:'pointer', fontSize:'0.7rem', color:'#ef4444' }}>
+                      <i className="ti ti-trash" />
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── AI Povzetek dneva ─────────────────────────────────────────────────────────
+const AI_POV_KLJUC = 'studyos-ai-povzetek-danes'
+
+function AIPovzetekDneva({ naloge, urnik }) {
+  const [besedilo, setBesedilo] = useState(() => {
+    try {
+      const s = JSON.parse(localStorage.getItem(AI_POV_KLJUC) || 'null')
+      if (s && s.datum === new Date().toISOString().slice(0, 10)) return s.tekst
+    } catch {}
+    return null
+  })
+  const [nalaga, setNalaga] = useState(false)
+
+  async function generiraj() {
+    setNalaga(true)
+    try {
+      const danes = new Date().toISOString().slice(0, 10)
+      const dnevUrnike = urnik.filter(u => {
+        const dn = ['ponedeljek','torek','sreda','četrtek','petek','sobota','nedelja']
+        return u.dan === dn[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1]
+      })
+      const dnevNaloge = naloge.filter(n => !n.opravljeno && n.rok && n.rok.slice(0,10) <= danes)
+      const aktivneNaloge = naloge.filter(n => !n.opravljeno).slice(0, 5)
+
+      const prompt = `Danes je ${new Date().toLocaleDateString('sl-SI', { weekday:'long', day:'numeric', month:'long', year:'numeric' })}.
+
+Urnik danes: ${dnevUrnike.length > 0 ? dnevUrnike.map(u => `${u.ura}:00 ${u.naslov || u.predmet}`).join(', ') : 'ni ur'}
+Zamujene naloge: ${dnevNaloge.map(n => n.besedilo).join(', ') || 'ni'}
+Aktivne naloge: ${aktivneNaloge.map(n => `${n.besedilo}${n.rok ? ` (rok: ${n.rok.slice(0,10)})` : ''}`).join(', ') || 'ni'}
+
+Napiši kratek, motivacijski povzetek dneva v 3–4 stavkih. Poudari kaj je nujno danes. Bodi konkreten in pozitiven.`
+
+      const odgovor = await aiRazgovor(null, [{ role:'user', content: prompt }])
+      setBesedilo(odgovor)
+      try { localStorage.setItem(AI_POV_KLJUC, JSON.stringify({ datum: danes, tekst: odgovor })) } catch {}
+    } catch (e) {
+      setBesedilo(`Napaka: ${e.message}`)
+    }
+    setNalaga(false)
+  }
+
+  return (
+    <div className="kartica" style={{ borderLeft:'3px solid var(--modra)' }}>
+      <div className="dash-kartica-naslov" style={{ justifyContent:'space-between' }}>
+        <span><i className="ti ti-sparkles" style={{ color:'var(--modra)' }} /> AI povzetek dneva</span>
+        <button
+          className="gumb gumb-sekundarni"
+          style={{ padding:'5px 12px', fontSize:'0.78rem' }}
+          onClick={generiraj}
+          disabled={nalaga}
+        >
+          {nalaga
+            ? <><div className="nalagalnik" style={{ width:12, height:12, borderWidth:2 }} /> Generiram…</>
+            : <><i className="ti ti-refresh" /> {besedilo ? 'Osveži' : 'Generiraj'}</>
+          }
+        </button>
+      </div>
+      {besedilo ? (
+        <p style={{ fontSize:'0.875rem', lineHeight:1.65, color:'var(--besedilo1)', margin:0 }}>{besedilo}</p>
+      ) : (
+        <p style={{ color:'var(--besedilo3)', fontSize:'0.85rem', fontStyle:'italic' }}>
+          Klikni "Generiraj" za AI povzetek tvojega dneva na podlagi urnika in nalog.
+        </p>
+      )}
+    </div>
+  )
+}
+
 // ── Glavna stran ──────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const { aktivniPredmet, setStran, predmeti } = useApp()
@@ -745,18 +916,27 @@ export default function Dashboard() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* Glava */}
       <div className="stran-glava" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4, marginBottom: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', width: '100%', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', width: '100%', justifyContent: 'space-between' }}>
           <div>
-            <h1 className="stran-naslov">{pozdrav()}</h1>
-            <p style={{ color: 'var(--besedilo3)', fontSize: '0.875rem', fontFamily: 'var(--mono)' }}>
-              {slovenskiDatum()}
-            </p>
+            <h1 style={{ fontSize: '1.8rem', fontWeight: 800, letterSpacing: '-0.03em', marginBottom: 4 }}>
+              {pozdrav()}
+            </h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{
+                fontSize: '0.78rem', fontWeight: 600, fontFamily: 'var(--mono)',
+                background: 'var(--ozadje2)', border: '1px solid var(--rob)',
+                borderRadius: 99, padding: '3px 12px', color: 'var(--besedilo3)',
+              }}>
+                <i className="ti ti-calendar" style={{ marginRight: 5 }} />
+                {slovenskiDatum()}
+              </span>
+            </div>
           </div>
           <button
             className={`gumb-ikona ${nastaviOdprt ? 'aktiven' : ''}`}
             onClick={() => setNastaviOdprt(o => !o)}
             title="Prilagodi razdelke"
-            style={{ width: 36, height: 36 }}
+            style={{ width: 36, height: 36, marginTop: 4 }}
           >
             <i className="ti ti-layout-grid" />
           </button>
@@ -773,99 +953,172 @@ export default function Dashboard() {
       {/* Stat kartice */}
       <div className="stat-mrezica">
         {[
-          { oznaka: 'Skupaj zapiskov',        vrednost: skupajZapiskov,  pod: 'vsi predmeti'        },
-          { oznaka: 'Opravljene naloge',       vrednost: opravljenih,     pod: `od ${naloge.length}` },
-          { oznaka: 'Predmeti ta teden',       vrednost: aktivniPredmeti, pod: 'v urniku'            },
-          { oznaka: 'Naloge v čakalni vrsti',  vrednost: neopravljenih,   pod: 'čaka na izvedbo'     },
+          { oznaka: 'Zapiski',         vrednost: skupajZapiskov,  pod: 'vsi predmeti',    ikona: 'ti-notebook'    },
+          { oznaka: 'Opravljeno',      vrednost: opravljenih,     pod: `od ${naloge.length} nalog`, ikona: 'ti-circle-check' },
+          { oznaka: 'Predmeti',        vrednost: aktivniPredmeti, pod: 'ta teden v urniku', ikona: 'ti-calendar-week' },
+          { oznaka: 'V čakalni vrsti', vrednost: neopravljenih,   pod: 'aktivnih nalog',  ikona: 'ti-clock'       },
         ].map((s, i) => (
           <div key={i} className="stat-kartica" style={{ '--barva-vrha': BARVE_STAT[i] }}>
-            <style>{`.stat-kartica:nth-child(${i+1})::before { background: ${BARVE_STAT[i]}; }`}</style>
-            <span className="stat-oznaka">{s.oznaka}</span>
+            <style>{`.stat-kartica:nth-child(${i+1})::before { background: ${BARVE_STAT[i]}; } .stat-kartica:nth-child(${i+1})::after { background: ${BARVE_STAT[i]}; }`}</style>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span className="stat-oznaka" style={{ marginBottom: 0 }}>{s.oznaka}</span>
+              <div style={{
+                width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                background: `${BARVE_STAT[i]}18`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <i className={`ti ${s.ikona}`} style={{ color: BARVE_STAT[i], fontSize: '1rem' }} />
+              </div>
+            </div>
             <span className="stat-vrednost" style={{ color: BARVE_STAT[i] }}>{s.vrednost}</span>
             <span className="stat-podnapis">{s.pod}</span>
           </div>
         ))}
       </div>
 
-      {/* Streak */}
-      <div className="dash-streak">
-        <div className="dash-streak-stevilka">{streak}</div>
-        <div className="dash-streak-info">
-          <div className="dash-streak-naslov">
-            {streak === 0 ? 'Začni streak!' : streak === 1 ? 'Dan streak' : `${streak} dni streak`}
-          </div>
-          <div className="dash-streak-opis">
-            {streak === 0 ? 'Odpri aplikacijo vsak dan' :
-             streak < 7   ? `${7 - streak} dni do tedenskega streaka` :
-             streak < 30  ? `${30 - streak} dni do mesečnega streaka` :
-             'Odlično! Vztrajaj! 💪'}
-          </div>
-        </div>
-        <div className="dash-streak-plamen">
-          {streak === 0 ? '💤' : streak < 7 ? '🔥' : streak < 30 ? '🔥🔥' : '🏆'}
-        </div>
-      </div>
-
-      {/* Dnevne navade */}
-      {widgeti.navade && <HabitTracker />}
-
-      {/* Pomodoro tedenski graf */}
-      {widgeti.pomo_graf && <PomodoroGraf />}
-
-      {/* Odštevalnik roka */}
-      {widgeti.rok && naslednjRok && (
-        <div className="kartica">
-          <div className="dash-kartica-naslov">
-            <i className="ti ti-alarm" style={{ color: 'var(--rdeca)' }} />
-            Naslednji rok
-          </div>
-          <OdstevalnikRoka naloga={naslednjRok} />
-        </div>
-      )}
-
-      {/* Nadaljuj zapisek */}
-      {widgeti.nadaljuj && zadnjiZapisek && (
-        <div
-          className="kartica dash-nadaljuj"
-          style={{ cursor: 'pointer' }}
-          onClick={() => setStran('zapiski')}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
-            <div style={{
-              width: 36, height: 36, borderRadius: 8,
-              background: zadnjiZapisek.barvaOzadja || 'var(--modra-svetla)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: 'var(--modra)', fontSize: '1.1rem', flexShrink: 0,
-            }}>
-              <i className="ti ti-notebook" />
-            </div>
-            <div>
-              <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{zadnjiZapisek.naslov}</div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--besedilo3)', marginTop: 2 }}>
-                Nadaljuj tam, kjer si ostal
+      {/* ── Vrstica 1: Streak + Navade ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <div className="dash-streak" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 12 }}>
+          {/* Zgoraj: število + plamen */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, width: '100%' }}>
+            <div className="dash-streak-stevilka">{streak}</div>
+            <div className="dash-streak-info" style={{ flex: 1 }}>
+              <div className="dash-streak-naslov">
+                {streak === 0 ? 'Začni streak!' : streak === 1 ? '1 dan streak' : `${streak} dni streak`}
+              </div>
+              <div className="dash-streak-opis">
+                {streak === 0 ? 'Odpri aplikacijo vsak dan' :
+                 streak < 7  ? `${7 - streak} dni do tedenskega streaka` :
+                 streak < 30 ? `${30 - streak} dni do mesečnega streaka` :
+                 'Odlično! Vztrajaj! 💪'}
               </div>
             </div>
+            <div className="dash-streak-plamen">
+              {streak === 0 ? '💤' : streak < 7 ? '🔥' : streak < 30 ? '🔥🔥' : '🏆'}
+            </div>
           </div>
-          <i className="ti ti-arrow-right" style={{ color: 'var(--modra)', fontSize: '1.1rem', flexShrink: 0 }} />
-        </div>
-      )}
 
-      {/* Cilji + Sticky */}
-      {widgeti.cilji && (
-        <div className="dash-mrezica-2">
-          <CiljiWidget />
-          <StickyNote />
-        </div>
-      )}
+          {/* 7-dnevni pregled */}
+          <div style={{ width: '100%' }}>
+            <div style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--besedilo3)', marginBottom: 8 }}>
+              Zadnjih 7 dni
+            </div>
+            <div style={{ display: 'flex', gap: 6, width: '100%' }}>
+              {Array.from({ length: 7 }, (_, i) => {
+                const d = new Date(); d.setDate(d.getDate() - (6 - i)); d.setHours(0,0,0,0)
+                const k = d.toISOString().slice(0, 10)
+                const aktiven = (() => { try { return JSON.parse(localStorage.getItem('studyos-aktivni-dnevi') || '[]').includes(k) } catch { return false } })()
+                const jeDanes = i === 6
+                const dnKratko = ['P','T','S','Č','P','S','N'][(d.getDay() + 6) % 7]
+                return (
+                  <div key={k} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                    <div style={{
+                      width: '100%', aspectRatio: '1', borderRadius: 8,
+                      background: aktiven ? 'var(--rumena)' : jeDanes ? 'var(--rumena)22' : 'var(--ozadje3)',
+                      border: jeDanes ? '2px solid var(--rumena)' : '2px solid transparent',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '0.7rem',
+                    }}>
+                      {aktiven && <i className="ti ti-check" style={{ color: '#fff', fontSize: '0.75rem', fontWeight: 900 }} />}
+                    </div>
+                    <span style={{ fontSize: '0.62rem', color: 'var(--besedilo3)', fontWeight: jeDanes ? 700 : 400 }}>{dnKratko}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
 
-      {/* Urnik + Naloge */}
+          {/* Napredek bar do naslednjega mejnika */}
+          {streak > 0 && (
+            <div style={{ width: '100%' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', color: 'var(--besedilo3)', marginBottom: 4 }}>
+                <span>Napredek do {streak < 7 ? '7' : streak < 30 ? '30' : '100'} dni</span>
+                <span style={{ fontFamily: 'var(--mono)', fontWeight: 700, color: 'var(--rumena)' }}>
+                  {streak}/{streak < 7 ? 7 : streak < 30 ? 30 : 100}
+                </span>
+              </div>
+              <div style={{ height: 6, background: 'var(--ozadje3)', borderRadius: 99, overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%', borderRadius: 99,
+                  background: 'linear-gradient(90deg, var(--rumena), #f97316)',
+                  width: `${Math.min(100, (streak / (streak < 7 ? 7 : streak < 30 ? 30 : 100)) * 100)}%`,
+                  transition: 'width 0.5s ease',
+                }} />
+              </div>
+            </div>
+          )}
+        </div>
+        {widgeti.navade
+          ? <HabitTracker />
+          : <div />
+        }
+      </div>
+
+      {/* ── Vrstica 2: Rok / Hitri dostop + Nadaljuj zapisek ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        {widgeti.rok && naslednjRok ? (
+          <div className="kartica">
+            <div className="dash-kartica-naslov">
+              <i className="ti ti-alarm" style={{ color: 'var(--rdeca)' }} /> Naslednji rok
+            </div>
+            <OdstevalnikRoka naloga={naslednjRok} />
+          </div>
+        ) : (
+          <div className="kartica">
+            <div className="dash-kartica-naslov">
+              <i className="ti ti-bolt" style={{ color: 'var(--rumena)' }} /> Hitri dostop
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {[
+                { ikona: 'ti-notebook',       barva: '#3B82F6', ime: 'Nov zapisek',  stran: 'zapiski'    },
+                { ikona: 'ti-check',          barva: '#22C55E', ime: 'Nova naloga',  stran: 'naloge'     },
+                { ikona: 'ti-calendar-event', barva: '#8B5CF6', ime: 'Nov izpit',    stran: 'izpiti'     },
+                { ikona: 'ti-clock',          barva: '#F59E0B', ime: 'Fokus timer',  stran: null, onClick: () => window.dispatchEvent(new CustomEvent('studyos:zacni-pomo')) },
+              ].map((a, i) => (
+                <button key={i}
+                  onClick={() => a.onClick ? a.onClick() : setStran(a.stran)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '10px 12px', borderRadius: 10,
+                    border: `1.5px solid ${a.barva}30`,
+                    background: `${a.barva}0d`,
+                    cursor: 'pointer', transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = `${a.barva}20`; e.currentTarget.style.borderColor = `${a.barva}60` }}
+                  onMouseLeave={e => { e.currentTarget.style.background = `${a.barva}0d`; e.currentTarget.style.borderColor = `${a.barva}30` }}
+                >
+                  <div style={{ width: 30, height: 30, borderRadius: 8, background: `${a.barva}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <i className={`ti ${a.ikona}`} style={{ color: a.barva, fontSize: '0.9rem' }} />
+                  </div>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--besedilo1)', textAlign: 'left' }}>{a.ime}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {widgeti.nadaljuj && zadnjiZapisek ? (
+          <div className="kartica dash-nadaljuj" style={{ cursor: 'pointer' }} onClick={() => setStran('zapiski')}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 8, background: zadnjiZapisek.barvaOzadja || 'var(--modra-svetla)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--modra)', fontSize: '1.1rem', flexShrink: 0 }}>
+                <i className="ti ti-notebook" />
+              </div>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{zadnjiZapisek.naslov}</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--besedilo3)', marginTop: 2 }}>Nadaljuj tam, kjer si ostal</div>
+              </div>
+            </div>
+            <i className="ti ti-arrow-right" style={{ color: 'var(--modra)', fontSize: '1.1rem', flexShrink: 0 }} />
+          </div>
+        ) : <div />}
+      </div>
+
+      {/* ── Vrstica 3: Urnik + Naloge ── */}
       {(widgeti.urnik || widgeti.naloge) && (
-        <div className="dash-mrezica-2">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           {widgeti.urnik && (
             <div className="kartica">
               <div className="dash-kartica-naslov">
-                <i className="ti ti-calendar-today" style={{ color: 'var(--modra)' }} />
-                Današnje ure
+                <i className="ti ti-calendar-today" style={{ color: 'var(--modra)' }} /> Današnje ure
               </div>
               {danasnjiDogodki.length === 0 ? (
                 <p style={{ color: 'var(--besedilo3)', fontSize: '0.85rem' }}>
@@ -874,14 +1127,8 @@ export default function Dashboard() {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {[...danasnjiDogodki].sort((a, b) => a.ura - b.ura).map(d => (
-                    <div key={d._id} style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '8px 12px', borderRadius: 8,
-                      background: d.barva + '18', borderLeft: `3px solid ${d.barva}`,
-                    }}>
-                      <span style={{ fontFamily: 'var(--mono)', fontSize: '0.72rem', color: 'var(--besedilo3)', minWidth: 38 }}>
-                        {d.ura}:00
-                      </span>
+                    <div key={d._id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, background: d.barva + '18', borderLeft: `3px solid ${d.barva}` }}>
+                      <span style={{ fontFamily: 'var(--mono)', fontSize: '0.72rem', color: 'var(--besedilo3)', minWidth: 38 }}>{d.ura}:00</span>
                       <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>{d.naslov}</span>
                     </div>
                   ))}
@@ -889,36 +1136,23 @@ export default function Dashboard() {
               )}
             </div>
           )}
-
           {widgeti.naloge && (
             <div className="kartica">
               <div className="dash-kartica-naslov">
-                <i className="ti ti-list-check" style={{ color: 'var(--modra)' }} />
-                Aktivne naloge
+                <i className="ti ti-list-check" style={{ color: 'var(--modra)' }} /> Aktivne naloge
               </div>
               {aktivneNaloge.length === 0 ? (
                 <p style={{ color: 'var(--besedilo3)', fontSize: '0.85rem' }}>Vse naloge so opravljene! 🎉</p>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {aktivneNaloge.map(n => (
-                    <div key={n._id} style={{
-                      display: 'flex', alignItems: 'center', gap: 9,
-                      padding: '7px 0', borderBottom: '1px solid var(--rob)',
-                    }}>
-                      <button
-                        className={`naloga-krogec ${n.opravljeno ? 'oznacen' : ''}`}
-                        style={{ width: 18, height: 18 }}
-                        onClick={() => preklopi(n)}
-                      >
+                    <div key={n._id} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '7px 0', borderBottom: '1px solid var(--rob)' }}>
+                      <button className={`naloga-krogec ${n.opravljeno ? 'oznacen' : ''}`} style={{ width: 18, height: 18 }} onClick={() => preklopi(n)}>
                         {n.opravljeno && <i className="ti ti-check" style={{ fontSize: '0.65rem', color: '#fff' }} />}
                       </button>
                       <span className={`prioriteta-pika prioriteta-${n.prioriteta}`} />
                       <span style={{ fontSize: '0.85rem', color: 'var(--besedilo1)', flex: 1 }}>{n.besedilo}</span>
-                      {n.rok && (
-                        <span style={{ fontSize: '0.68rem', color: 'var(--besedilo3)', marginLeft: 'auto', fontFamily: 'var(--mono)' }}>
-                          {new Date(n.rok).toLocaleDateString('sl-SI', { day: 'numeric', month: 'short' })}
-                        </span>
-                      )}
+                      {n.rok && <span style={{ fontSize: '0.68rem', color: 'var(--besedilo3)', fontFamily: 'var(--mono)' }}>{new Date(n.rok).toLocaleDateString('sl-SI', { day: 'numeric', month: 'short' })}</span>}
                     </div>
                   ))}
                 </div>
@@ -928,66 +1162,56 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Per-subject stats */}
-      {widgeti.statistike && predmetStatistike.length > 0 && (
-        <div className="kartica">
-          <div className="dash-kartica-naslov">
-            <i className="ti ti-chart-bar" style={{ color: 'var(--modra)' }} />
-            Statistike po predmetih
-          </div>
-          <div className="predmet-stat-seznam">
-            {predmetStatistike.map(p => (
-              <div key={p.id} className="predmet-stat-vrstica">
-                <div className="predmet-stat-ikona" style={{ background: p.barva + '22' }}>
-                  {p.ikona}
+      {/* ── Vrstica 4: Cilji + Fokus seznam ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        {widgeti.cilji && <CiljiWidget />}
+        {widgeti.fokus_seznam && <FokusSeznam />}
+      </div>
+
+      {/* ── Vrstica 5: Statistike + Napredek ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        {widgeti.statistike && predmetStatistike.length > 0 && (
+          <div className="kartica">
+            <div className="dash-kartica-naslov">
+              <i className="ti ti-chart-bar" style={{ color: 'var(--modra)' }} /> Statistike po predmetih
+            </div>
+            <div className="predmet-stat-seznam">
+              {predmetStatistike.map(p => (
+                <div key={p.id} className="predmet-stat-vrstica">
+                  <div className="predmet-stat-ikona" style={{ background: p.barva + '22' }}>{p.ikona}</div>
+                  <span className="predmet-stat-ime">{p.ime}</span>
+                  <div className="predmet-stat-numeri">
+                    {p.zapiskov > 0 && <span className="predmet-stat-n" title="Zapiski"><i className="ti ti-notebook" style={{ fontSize: '0.7rem' }} /> {p.zapiskov}</span>}
+                    {p.nalog > 0 && <span className="predmet-stat-n" title="Naloge"><i className="ti ti-check" style={{ fontSize: '0.7rem' }} /> {p.nalog}</span>}
+                    {p.ur > 0 && <span className="predmet-stat-n" title="Ure"><i className="ti ti-calendar" style={{ fontSize: '0.7rem' }} /> {p.ur}</span>}
+                  </div>
                 </div>
-                <span className="predmet-stat-ime">{p.ime}</span>
-                <div className="predmet-stat-numeri">
-                  {p.zapiskov > 0 && (
-                    <span className="predmet-stat-n" title="Zapiski">
-                      <i className="ti ti-notebook" style={{ fontSize: '0.7rem' }} /> {p.zapiskov}
-                    </span>
-                  )}
-                  {p.nalog > 0 && (
-                    <span className="predmet-stat-n" title="Aktivne naloge">
-                      <i className="ti ti-check" style={{ fontSize: '0.7rem' }} /> {p.nalog}
-                    </span>
-                  )}
-                  {p.ur > 0 && (
-                    <span className="predmet-stat-n" title="Ure v urniku">
-                      <i className="ti ti-calendar" style={{ fontSize: '0.7rem' }} /> {p.ur}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+        {widgeti.napredek_predmetov && <NapredekPredmetov predmeti={predmeti} zapiski={zapiski} naloge={naloge} />}
+      </div>
 
-      {/* Napredek predmetov */}
-      {widgeti.napredek_predmetov && <NapredekPredmetov predmeti={predmeti} zapiski={zapiski} naloge={naloge} />}
+      {/* ── Vrstica 6: Pomodoro graf — polna širina ── */}
+      {widgeti.pomo_graf && <PomodoroGraf />}
 
-      {/* Fokus seznam za danes */}
-      {widgeti.fokus_seznam && (
-        <div className="dash-mrezica-2">
-          <FokusSeznam />
-          <div />
-        </div>
-      )}
-
-      {/* Aktivnost heatmap */}
+      {/* ── Vrstica 7: Aktivnost heatmap — polna širina ── */}
       {widgeti.aktivnost && (
         <div className="kartica">
           <div className="dash-kartica-naslov">
-            <i className="ti ti-activity" style={{ color: 'var(--modra)' }} />
-            Aktivnost — zadnjih 10 tednov
+            <i className="ti ti-activity" style={{ color: 'var(--modra)' }} /> Aktivnost — zadnjih 10 tednov
           </div>
           <AktivnostMreza zapiski={zapiski} naloge={naloge} />
         </div>
       )}
 
-      {/* Spacer at bottom */}
+      {/* ── Vrstica 8: Sticky + AI povzetek ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <StickyNotes />
+        <AIPovzetekDneva naloge={naloge} urnik={dogodki} />
+      </div>
+
       <div style={{ height: 8 }} />
     </div>
   )

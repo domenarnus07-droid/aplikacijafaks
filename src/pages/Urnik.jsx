@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { pridobiUrnik, ustvariUrniskiVnos, posodobiUrniskiVnos, izbrisiUrniskiVnos } from '../api.js'
 import { prikaziObvestilo } from '../toast.js'
 import { useApp } from '../App.jsx'
@@ -94,6 +94,64 @@ function DogodekModal({ dogodek, onZapri, onShrani, predmeti }) {
       </div>
     </div>
   )
+}
+
+// ── ICS uvoz ─────────────────────────────────────────────────────────────────
+function parseICS(besedilo) {
+  const dnevi = ['ponedeljek','torek','sreda','četrtek','petek','sobota','nedelja']
+  const dnEn  = { MO: 0, TU: 1, WE: 2, TH: 3, FR: 4, SA: 5, SU: 6 }
+  const rezultati = []
+
+  const dogodki = besedilo.split('BEGIN:VEVENT').slice(1)
+  for (const blok of dogodki) {
+    try {
+      const get = (k) => {
+        const m = blok.match(new RegExp(`^${k}[^:]*:(.+)$`, 'm'))
+        return m ? m[1].replace(/\r/g, '').trim() : null
+      }
+      const naslov  = get('SUMMARY') || 'Brez naslova'
+      const dtstart = get('DTSTART')
+      const dtend   = get('DTEND')
+      const rrule   = get('RRULE')
+
+      if (!dtstart) continue
+
+      // Izvleci uro začetka (oblika: YYYYMMDDTHHMMSS ali YYYYMMDDTHHMMSZ)
+      const timeMatch = dtstart.match(/T(\d{2})(\d{2})/)
+      const ura = timeMatch ? parseInt(timeMatch[1]) : 8
+
+      // Trajanje
+      let trajanje = 1
+      if (dtend) {
+        const endMatch = dtend.match(/T(\d{2})(\d{2})/)
+        if (endMatch) {
+          const konecUra = parseInt(endMatch[1])
+          const konecMin = parseInt(endMatch[2])
+          const zacMin   = timeMatch ? parseInt(timeMatch[2]) : 0
+          trajanje = Math.max(1, Math.round(((konecUra * 60 + konecMin) - (ura * 60 + zacMin)) / 60))
+        }
+      }
+
+      // Dan tedna iz datuma ali RRULE BYDAY
+      let dan = -1
+      const dateMatch = dtstart.match(/^(\d{4})(\d{2})(\d{2})/)
+      if (dateMatch) {
+        const d = new Date(parseInt(dateMatch[1]), parseInt(dateMatch[2])-1, parseInt(dateMatch[3]))
+        dan = d.getDay() === 0 ? 6 : d.getDay() - 1  // 0=pon
+      }
+      if (rrule) {
+        const byday = rrule.match(/BYDAY=([A-Z,]+)/)
+        if (byday) {
+          const dni = byday[1].split(',').map(d => dnEn[d] ?? -1).filter(d => d >= 0 && d <= 4)
+          if (dni.length > 0) dan = dni[0]
+        }
+      }
+      if (dan < 0 || dan > 4) continue  // preskoči vikende in neznane
+
+      rezultati.push({ naslov, dan, ura, trajanje, barva: '#2563EB', predmet: '' })
+    } catch { /* preskoči pokvarjen blok */ }
+  }
+  return rezultati
 }
 
 // ── ICS izvoz ─────────────────────────────────────────────────────────────────
@@ -210,12 +268,30 @@ export default function Urnik() {
   const { predmeti } = useApp()
   const [dogodki, setDogodki] = useState([])
   const [nalaga,  setNalaga]  = useState(true)
-  const [modal,   setModal]   = useState(null)   // null | {} | event-object
-  const [pogled,  setPogled]  = useState('mrezica')  // 'mrezica' | 'seznam'
+  const [modal,   setModal]   = useState(null)
+  const [pogled,  setPogled]  = useState('mrezica')
+  const icsRef = useRef(null)
 
   useEffect(() => {
     pridobiUrnik().then(setDogodki).finally(() => setNalaga(false))
   }, [])
+
+  async function uvozICS(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    try {
+      const besedilo = await file.text()
+      const uvozeni  = parseICS(besedilo)
+      if (uvozeni.length === 0) { prikaziObvestilo('Ni najdenih dogodkov v .ics datoteki', 'napaka'); return }
+      let dodanih = 0
+      for (const d of uvozeni) {
+        const nov = await ustvariUrniskiVnos(d)
+        if (nov) { setDogodki(ds => [...ds, nov]); dodanih++ }
+      }
+      prikaziObvestilo(`Uvoženo ${dodanih} ur iz urnika`, 'uspeh')
+    } catch { prikaziObvestilo('Napaka pri branju .ics datoteke', 'napaka') }
+  }
 
   function izvozICS() {
     const vsebina = ustvariICS(dogodki)
@@ -288,6 +364,10 @@ export default function Urnik() {
               <i className="ti ti-list" />
             </button>
           </div>
+          <input ref={icsRef} type="file" accept=".ics" style={{ display:'none' }} onChange={uvozICS} />
+          <button className="gumb gumb-sekundarni" onClick={() => icsRef.current?.click()} title="Uvozi urnik iz .ics (FERI/Moodle)">
+            <i className="ti ti-calendar-up" /> Uvozi .ics
+          </button>
           {dogodki.length > 0 && (
             <button className="gumb gumb-sekundarni" onClick={izvozICS} title="Izvozi urnik kot .ics (iCal)">
               <i className="ti ti-calendar-down" /> .ics

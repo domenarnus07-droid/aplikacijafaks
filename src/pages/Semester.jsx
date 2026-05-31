@@ -170,6 +170,86 @@ function DogodekKartica({ d }) {
   )
 }
 
+// ── Cilji semestra ────────────────────────────────────────────────────────────
+const CILJI_KLJUC = 'studyos-sem-cilji'
+function beriCilje() { try { return JSON.parse(localStorage.getItem(CILJI_KLJUC) || '{}') } catch { return {} } }
+function shraniCilje(c) { try { localStorage.setItem(CILJI_KLJUC, JSON.stringify(c)) } catch {} }
+
+function CiljiSemestra({ predmeti, ocene }) {
+  const [cilji, setCilji] = useState(beriCilje)
+  const [uredi, setUredi] = useState(false)
+
+  function nastavi(predId, vrednost) {
+    const novi = { ...cilji, [predId]: vrednost }
+    setCilji(novi); shraniCilje(novi)
+  }
+
+  // Povprečna ocena po predmetu iz localStorage ocen
+  function povprecjeZaPredmet(predId) {
+    try {
+      const oc = JSON.parse(localStorage.getItem('studyos-ocene') || '[]')
+      const filtrirane = oc.filter(o => o.predmet === predId && o.ocena)
+      if (filtrirane.length === 0) return null
+      return (filtrirane.reduce((s, o) => s + parseFloat(o.ocena), 0) / filtrirane.length).toFixed(1)
+    } catch { return null }
+  }
+
+  return (
+    <div className="kartica" style={{ marginBottom: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <span style={{ fontWeight: 700, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <i className="ti ti-target" style={{ color: 'var(--modra)' }} /> Cilji semestra
+        </span>
+        <button className="gumb-ikona" onClick={() => setUredi(u => !u)} title="Uredi cilje">
+          <i className={`ti ti-${uredi ? 'check' : 'edit'}`} />
+        </button>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {predmeti.map(p => {
+          const cilj = parseFloat(cilji[p.id]) || 0
+          const trenutna = povprecjeZaPredmet(p.id)
+          const dosegli = trenutna && parseFloat(trenutna) >= cilj
+          return (
+            <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: '1rem', width: 24 }}>{p.ikona}</span>
+              <span style={{ flex: 1, fontSize: '0.85rem', fontWeight: 500 }}>{p.ime}</span>
+              {trenutna && (
+                <span style={{ fontSize: '0.78rem', fontFamily: 'var(--mono)', color: dosegli ? 'var(--zelena)' : 'var(--besedilo3)', fontWeight: 600 }}>
+                  {trenutna} {dosegli ? '✓' : ''}
+                </span>
+              )}
+              {uredi ? (
+                <input
+                  type="number" min={1} max={10} step={0.5}
+                  className="vhod"
+                  style={{ width: 70, textAlign: 'center', fontSize: '0.85rem', padding: '5px 8px' }}
+                  value={cilji[p.id] || ''}
+                  onChange={e => nastavi(p.id, e.target.value)}
+                  placeholder="Cilj"
+                />
+              ) : (
+                <div style={{ width: 100 }}>
+                  <div style={{ height: 6, background: 'var(--ozadje3)', borderRadius: 99, overflow: 'hidden' }}>
+                    <div style={{
+                      height: '100%', borderRadius: 99,
+                      background: dosegli ? 'var(--zelena)' : p.barva,
+                      width: cilj > 0 && trenutna ? `${Math.min(100, (parseFloat(trenutna) / cilj) * 100)}%` : '0%',
+                      transition: 'width 0.4s',
+                    }} />
+                  </div>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--besedilo3)', marginTop: 2, textAlign: 'right' }}>
+                    {cilj > 0 ? `cilj: ${cilj}` : <span style={{ color: 'var(--besedilo3)', fontStyle: 'italic' }}>ni nastavljeno</span>}
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Glavna stran ──────────────────────────────────────────────────────────────
 export default function Semester() {
   const { predmeti } = useApp()
@@ -314,6 +394,9 @@ export default function Semester() {
         <div className="nalagalnik" />
       ) : (
         <>
+          {/* Cilji semestra */}
+          <CiljiSemestra predmeti={predmeti} />
+
           {/* Časovnica */}
           {semester && (
             <div className="kartica" style={{ marginBottom: 16 }}>

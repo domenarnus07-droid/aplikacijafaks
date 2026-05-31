@@ -55,12 +55,16 @@ function zazvoni(frekvence = [523, 659, 784], trajanje = 0.6) {
   } catch {}
 }
 
-function shraniSesijoZPredmetom(tip, trajanje, predmet) {
+function shraniSesijoZPredmetom(tip, trajanje, predmet, naloga) {
   try {
     const sesije = beriSesije()
-    sesije.unshift({ tip, zacetek: new Date().toISOString(), trajanje, predmet: predmet || null })
+    sesije.unshift({ tip, zacetek: new Date().toISOString(), trajanje, predmet: predmet || null, naloga: naloga || null })
     localStorage.setItem(SESIJE_KLJUC, JSON.stringify(sesije.slice(0, 30)))
   } catch {}
+}
+
+function beriNalogeLokalno() {
+  try { return JSON.parse(localStorage.getItem('studyos-local-naloge') || '[]') } catch { return [] }
 }
 
 export default function PomodoroTimer() {
@@ -75,6 +79,14 @@ export default function PomodoroTimer() {
   const [sesije,        setSesije]       = useState(beriSesije)
   const [zvoki,         setZvoki]        = useState(() => localStorage.getItem('studyos-zvoki') !== 'off')
   const [aktivniPredmet, setAktivniPredmet] = useState(() => localStorage.getItem('studyos-pomo-predmet') || '')
+  const [aktivnaNaloga,  setAktivnaNaloga]  = useState('')
+  const aktivnaNalogaRef = useRef('')
+  aktivnaNalogaRef.current = aktivnaNaloga
+
+  const vseNaloge = beriNalogeLokalno().filter(n => !n.opravljeno)
+  const filtriranjeNaloge = aktivniPredmet
+    ? vseNaloge.filter(n => n.predmet === aktivniPredmet)
+    : vseNaloge
 
   const aktivniPredmetRef = useRef(aktivniPredmet)
   aktivniPredmetRef.current = aktivniPredmet
@@ -137,7 +149,7 @@ export default function PomodoroTimer() {
         if (f === 'delo') {
           const novi = skupajRef.current + 1
           setSkupaj(novi)
-          shraniSesijoZPredmetom('fokus', cs.delo, aktivniPredmetRef.current)
+          shraniSesijoZPredmetom('fokus', cs.delo, aktivniPredmetRef.current, aktivnaNalogaRef.current)
           setSesije(beriSesije())
           const nasl = novi % 4 === 0 ? 'dolgi' : 'odmor'
           setFaza(nasl); setCas(cs[nasl] * 60)
@@ -257,6 +269,28 @@ export default function PomodoroTimer() {
             </div>
           )}
 
+          {/* Naloga selector */}
+          {filtriranjeNaloge.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 2px' }}>
+              <i className="ti ti-check" style={{ color: 'var(--besedilo3)', fontSize: '0.8rem', flexShrink: 0 }} />
+              <select
+                className="vhod izbira"
+                style={{ flex: 1, fontSize: '0.78rem', padding: '5px 8px' }}
+                value={aktivnaNaloga}
+                onChange={e => setAktivnaNaloga(e.target.value)}
+                disabled={tece}
+                title="Izberi nalogo za to sejo"
+              >
+                <option value="">Brez naloge</option>
+                {filtriranjeNaloge.slice(0, 10).map(n => (
+                  <option key={n._id || n.id} value={n.besedilo}>
+                    {n.besedilo.length > 35 ? n.besedilo.slice(0, 35) + '…' : n.besedilo}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* Zvok toggle */}
           <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
             <button
@@ -315,7 +349,7 @@ export default function PomodoroTimer() {
                     {s.tip === 'fokus' ? '🎯 Fokus' : '☕ Odmor'}
                   </span>
                   <span style={{ color: 'var(--besedilo3)', flex: 1, fontFamily: 'var(--mono)', fontSize: '0.7rem' }}>
-                    {s.trajanje} min
+                    {s.trajanje} min{s.naloga ? ` · ${s.naloga.slice(0, 20)}…` : ''}
                   </span>
                   <span className="pomo-zgod-cas">{formatCas(s.zacetek)}</span>
                 </div>

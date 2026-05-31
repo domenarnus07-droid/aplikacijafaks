@@ -8,6 +8,8 @@ import { connectDB } from './db.js'
 import zapiski  from './routes/zapiski.js'
 import naloge   from './routes/naloge.js'
 import urnik    from './routes/urnik.js'
+import auth     from './routes/auth.js'
+import User     from './models/User.js'
 
 dotenv.config()
 
@@ -24,6 +26,7 @@ app.use(express.json({ limit: '2mb' }))
 app.get('/api/zdravje', (_req, res) => res.json({ status: 'ok' }))
 
 // ── API poti ──────────────────────────────────────────────────────────────────
+app.use('/api/auth',    auth)
 app.use('/api/zapiski', zapiski)
 app.use('/api/naloge',  naloge)
 app.use('/api/urnik',   urnik)
@@ -93,5 +96,14 @@ app.listen(PORT, () => {
   console.log(`🚀 StudyOS: http://localhost:${PORT}`)
 })
 
-// MongoDB v ozadju — neuspeh NE ustavi strežnika
-connectDB().catch(() => {})
+// MongoDB v ozadju + seed admin
+connectDB().then(async (ok) => {
+  if (!ok) return
+  try {
+    const obstaja = await User.findOne({ username: 'admin' })
+    if (!obstaja) {
+      await User.create({ username: 'admin', geslo: 'domen123', vloga: 'admin' })
+      console.log('✅ Admin ustvarjen (admin / domen123)')
+    }
+  } catch {}
+}).catch(() => {})

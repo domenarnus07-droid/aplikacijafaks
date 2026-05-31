@@ -301,10 +301,13 @@ export default function Projekti() {
       <div style={{ display: 'grid', gridTemplateColumns: '210px 1fr', gap: 20, alignItems: 'start', minWidth: 0, overflow: 'hidden' }}>
 
         {/* ── Levi panel: seznam projektov ── */}
-        <div style={{ background: 'var(--ozadje2)', borderRadius: 12, border: '1.5px solid var(--rob)', padding: 12, position: 'sticky', top: 0, maxHeight: 'calc(100vh - 120px)', overflowY: 'auto' }}>
-          <div style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--besedilo3)', marginBottom: 10 }}>
-            Projekti ({projekti.length})
+        <div style={{ background: 'var(--ozadje2)', borderRadius: 12, border: '1.5px solid var(--rob)', position: 'sticky', top: 0, maxHeight: 'calc(100vh - 120px)', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', alignItems: 'center', minHeight: 52, padding: '0 12px', borderBottom: '1.5px solid var(--rob)', flexShrink: 0 }}>
+            <span style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--besedilo3)' }}>
+              Projekti ({projekti.length})
+            </span>
           </div>
+          <div style={{ padding: 12 }}>
 
           {projekti.length === 0 && (
             <div style={{ padding: '16px 0', textAlign: 'center', color: 'var(--besedilo3)', fontSize: '0.82rem' }}>
@@ -355,6 +358,7 @@ export default function Projekti() {
               </div>
             )
           })}
+          </div>
         </div>
 
         {/* ── Desni panel: kanban ── */}
@@ -366,7 +370,7 @@ export default function Projekti() {
         ) : (
           <div>
             {/* Projekt header + toggle */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap', minHeight: 52 }}>
               <span style={{ width: 14, height: 14, borderRadius: '50%', background: aktProjekt.barva, flexShrink: 0 }} />
               <span style={{ fontWeight: 700, fontSize: '1.1rem' }}>{aktProjekt.ime}</span>
               <span style={{ fontSize: '0.75rem', color: 'var(--besedilo3)', background: 'var(--ozadje2)', padding: '2px 8px', borderRadius: 99 }}>

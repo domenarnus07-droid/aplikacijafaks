@@ -327,7 +327,7 @@ input, textarea, select { font-family: inherit; color: var(--besedilo1); }
 /* Dno sidebara */
 .sidebar-dno {
   margin-top: auto;
-  padding: 0 10px 12px;
+  padding: 8px 10px 12px;
   border-top: 1.5px solid var(--rob);
   flex-shrink: 0;
   display: flex;
@@ -418,6 +418,7 @@ input, textarea, select { font-family: inherit; color: var(--besedilo1); }
 .gumb {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   padding: 9px 18px;
   border-radius: var(--polmer-m);
@@ -535,6 +536,8 @@ input, textarea, select { font-family: inherit; color: var(--besedilo1); }
   padding: 28px;
   width: 500px;
   max-width: calc(100vw - 40px);
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
   margin: 0 auto;
   box-shadow: var(--senca-lg);
   animation: dvigni .18s ease;
@@ -564,36 +567,49 @@ input, textarea, select { font-family: inherit; color: var(--besedilo1); }
 
 .toast-vsebnik {
   position: fixed;
-  bottom: 24px;
-  right: 24px;
-  z-index: 500;
+  bottom: 28px;
+  right: 28px;
+  z-index: 9000;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  pointer-events: none;
 }
 
 .toast {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 18px;
-  border-radius: var(--polmer-m);
+  gap: 12px;
+  padding: 14px 18px;
+  border-radius: 14px;
   font-size: 0.875rem;
   font-weight: 500;
-  box-shadow: var(--senca-lg);
-  animation: dvigni .2s ease;
-  min-width: 220px;
-  max-width: 360px;
-  border: 1.5px solid transparent;
+  min-width: 260px;
+  max-width: 400px;
+  background: var(--ozadje1);
+  color: var(--besedilo1);
+  border-left: 4px solid transparent;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.22), 0 2px 8px rgba(0,0,0,0.12);
+  pointer-events: auto;
 }
-.toast.uspeh  { background: var(--zelena-bg);    border-color: var(--zelena);    color: #14532d; }
-.toast.napaka { background: var(--rdeca-bg);     border-color: var(--rdeca);     color: #7f1d1d; }
-.toast.info   { background: var(--modra-svetla); border-color: var(--modra);     color: var(--modra2); }
-body.temno .toast.uspeh  { color: #86EFAC; }
-body.temno .toast.napaka { color: #FCA5A5; }
-body.temno .toast.info   { color: var(--modra3); }
+.toast.uspeh  { border-left-color: var(--zelena); }
+.toast.napaka { border-left-color: var(--rdeca);  }
+.toast.info   { border-left-color: var(--modra);  }
 
-.toast-ikona { font-size: 1rem; flex-shrink: 0; }
+.toast-ikona {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.toast.uspeh  .toast-ikona { background: var(--zelena-bg); color: var(--zelena); }
+.toast.napaka .toast-ikona { background: var(--rdeca-bg);  color: var(--rdeca);  }
+.toast.info   .toast-ikona { background: var(--ozadje3);   color: var(--modra);  }
 
 /* ════════════════════════════════════════════════════════════════
    NALAGANJE / PRAZNO STANJE
@@ -690,17 +706,17 @@ body.temno .oznaka-rumena { background: #451a03; color: #FCD34D; }
 .stat-mrezica {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
+  gap: 14px;
 }
 
 .stat-kartica {
   background: var(--ozadje1);
   border: 1.5px solid var(--rob);
-  border-radius: var(--polmer);
-  padding: 20px;
+  border-radius: 16px;
+  padding: 22px 20px 18px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   transition: var(--prehod);
   position: relative;
   overflow: hidden;
@@ -709,29 +725,39 @@ body.temno .oznaka-rumena { background: #451a03; color: #FCD34D; }
   content: '';
   position: absolute;
   top: 0; left: 0; right: 0;
-  height: 3px;
+  height: 4px;
   background: var(--modra);
-  border-radius: var(--polmer) var(--polmer) 0 0;
+  border-radius: 16px 16px 0 0;
 }
-.stat-kartica:hover { box-shadow: var(--senca-lg); transform: translateY(-2px); }
+.stat-kartica::after {
+  content: '';
+  position: absolute;
+  bottom: -20px; right: -20px;
+  width: 80px; height: 80px;
+  border-radius: 50%;
+  background: var(--modra);
+  opacity: 0.05;
+}
+.stat-kartica:hover { box-shadow: var(--senca-lg); transform: translateY(-3px); }
 
 .stat-oznaka {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   color: var(--besedilo3);
+  margin-bottom: 6px;
 }
 .stat-vrednost {
-  font-size: 2.2rem;
-  font-weight: 700;
+  font-size: 2.4rem;
+  font-weight: 800;
   font-family: var(--mono);
-  color: var(--modra);
-  letter-spacing: -0.04em;
-  line-height: 1.1;
+  letter-spacing: -0.05em;
+  line-height: 1;
+  margin-bottom: 4px;
 }
 .stat-podnapis {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: var(--besedilo3);
 }
 
@@ -742,8 +768,11 @@ body.temno .oznaka-rumena { background: #451a03; color: #FCD34D; }
 }
 
 .dash-kartica-naslov {
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--besedilo3);
   margin-bottom: 14px;
   display: flex;
   align-items: center;
@@ -909,7 +938,9 @@ body.temno .oznaka-rumena { background: #451a03; color: #FCD34D; }
   overflow-y: auto;
   font-family: 'Space Grotesk', sans-serif;
   box-sizing: border-box;
+  scrollbar-width: none;
 }
+.urednik-besedilo::-webkit-scrollbar { display: none; }
 
 .urednik-brez-izbire {
   display: flex;
@@ -1923,24 +1954,34 @@ body.temno .gumb-ikona.aktiven {
 .dash-streak {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 16px 22px;
-  background: var(--ozadje1);
-  border: 1.5px solid var(--rob);
-  border-radius: var(--polmer);
+  gap: 16px;
+  padding: 18px 24px;
+  background: linear-gradient(135deg, var(--ozadje1) 0%, color-mix(in srgb, var(--rumena) 6%, var(--ozadje1)) 100%);
+  border: 1.5px solid color-mix(in srgb, var(--rumena) 25%, var(--rob));
+  border-radius: 16px;
+  position: relative;
+  overflow: hidden;
+}
+.dash-streak::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--rumena), #f97316);
+  border-radius: 16px 16px 0 0;
 }
 .dash-streak-stevilka {
-  font-size: 2.8rem;
-  font-weight: 800;
+  font-size: 3rem;
+  font-weight: 900;
   font-family: var(--mono);
   color: var(--rumena);
   line-height: 1;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.05em;
 }
-.dash-streak-info { display: flex; flex-direction: column; gap: 2px; }
-.dash-streak-naslov { font-weight: 700; font-size: 1rem; }
-.dash-streak-opis   { font-size: 0.78rem; color: var(--besedilo3); }
-.dash-streak-plamen { font-size: 2.2rem; margin-left: auto; }
+.dash-streak-info { display: flex; flex-direction: column; gap: 3px; }
+.dash-streak-naslov { font-weight: 700; font-size: 0.95rem; }
+.dash-streak-opis   { font-size: 0.76rem; color: var(--besedilo3); }
+.dash-streak-plamen { font-size: 2.4rem; margin-left: auto; filter: drop-shadow(0 2px 8px rgba(251,191,36,.4)); }
 
 .predmet-stat-seznam { display: flex; flex-direction: column; gap: 8px; }
 .predmet-stat-vrstica {
@@ -2846,7 +2887,6 @@ body.temno .bulk-vrstica { background: var(--ozadje3); color: var(--besedilo1); 
 }
 .stran-animacija {
   animation: stranSlideIn 0.28s cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: transform, opacity;
 }
 
 /* Card entrance stagger */
@@ -2930,11 +2970,11 @@ body.temno .bulk-vrstica { background: var(--ozadje3); color: var(--besedilo1); 
 
 /* Toast entrance */
 @keyframes toastSlide {
-  from { opacity: 0; transform: translateX(60px); }
-  to   { opacity: 1; transform: translateX(0); }
+  from { opacity: 0; transform: translateX(24px) scale(0.96); }
+  to   { opacity: 1; transform: translateX(0)    scale(1);    }
 }
 .toast {
-  animation: toastSlide 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: toastSlide 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 /* Focus mode transition */

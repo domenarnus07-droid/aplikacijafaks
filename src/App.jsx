@@ -29,6 +29,8 @@ import StudyMusic        from './components/StudyMusic.jsx'
 import HitraSeja         from './components/HitraSeja.jsx'
 import ZivaUra           from './components/ZivaUra.jsx'
 import Bralnik           from './pages/Bralnik.jsx'
+import Navade            from './pages/Navade.jsx'
+import Prijava           from './pages/Prijava.jsx'
 
 export const AppKontekst = createContext(null)
 export function useApp() { return useContext(AppKontekst) }
@@ -90,14 +92,23 @@ const STRANI = {
   vzorec:     { oznaka: 'Miselni vzorci', ikona: 'ti-share',        komponenta: MiselniVzorec },
   koledar:    { oznaka: 'Koledar',    ikona: 'ti-calendar',         komponenta: Koledar    },
   bralnik:    { oznaka: 'Bralnik',   ikona: 'ti-bookmarks',        komponenta: Bralnik    },
+  navade:     { oznaka: 'Navade',    ikona: 'ti-check',            komponenta: Navade     },
 }
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 function Sidebar({ stran, setStran, temno, setTemno, nalogeBadge,
                    aktivniPredmet, setAktivniPredmet, predmeti,
                    onKlikPredmet, onIskanje, mobilniMenuOdprt, setMobilniMenuOdprt,
-                   vseTagi, aktivniTag, setAktivniTag, onTedenski, jeOnline, onHitraSeja,
-                   nedavniZapiski }) {
+                   vseTagi, setVseTagi, aktivniTag, setAktivniTag, onTedenski, jeOnline, onHitraSeja,
+                   nedavniZapiski, uporabnik, onOdjava }) {
+
+  function izbrisiTag(tag, e) {
+    e.stopPropagation()
+    const novi = vseTagi.filter(t => t !== tag)
+    setVseTagi(novi)
+    try { localStorage.setItem('studyos-tagi-cache', JSON.stringify(novi)) } catch {}
+    if (aktivniTag === tag) setAktivniTag(null)
+  }
   return (
     <>
       {mobilniMenuOdprt && (
@@ -166,7 +177,7 @@ function Sidebar({ stran, setStran, temno, setTemno, nalogeBadge,
 
         <div className="sidebar-sekcija">
           <div className="sidebar-sekcija-naslov">Orodja</div>
-          {['kviz', 'semester', 'dosezki', 'projekti', 'vzorec', 'koledar', 'bralnik'].map(k => (
+          {['kviz', 'semester', 'dosezki', 'projekti', 'vzorec', 'koledar', 'bralnik', 'navade'].map(k => (
             <button key={k} className={`nav-element ${stran === k ? 'aktiven' : ''}`}
               onClick={() => { setStran(k); setMobilniMenuOdprt(false) }}>
               <i className={`nav-ikona ti ${STRANI[k].ikona}`} />
@@ -207,6 +218,22 @@ function Sidebar({ stran, setStran, temno, setTemno, nalogeBadge,
                 onClick={() => { setAktivniTag(aktivniTag === tag ? null : tag); setMobilniMenuOdprt(false) }}>
                 <span className="predmet-ikona" style={{ fontFamily: 'var(--mono)', fontSize: '0.75rem' }}>#</span>
                 <span className="predmet-ime">{tag}</span>
+                <span
+                  onClick={e => izbrisiTag(tag, e)}
+                  title="Zbriši tag"
+                  style={{
+                    marginLeft: 'auto', flexShrink: 0,
+                    width: 16, height: 16,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    borderRadius: '50%', fontSize: '0.65rem',
+                    opacity: 0.4, transition: 'opacity 0.15s',
+                    color: 'currentColor',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+                  onMouseLeave={e => e.currentTarget.style.opacity = '0.4'}
+                >
+                  <i className="ti ti-x" />
+                </span>
               </button>
             ))}
             {aktivniTag && (
@@ -219,6 +246,48 @@ function Sidebar({ stran, setStran, temno, setTemno, nalogeBadge,
         )}
 
         <div className="sidebar-dno">
+          {/* Uporabnik info */}
+          {uporabnik && (
+            <div style={{ marginBottom: 4 }}>
+              {/* Uporabnik info */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '8px 10px 6px',
+              }}>
+                <div style={{
+                  width: 30, height: 30, borderRadius: '50%',
+                  background: 'var(--modra)', display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', fontSize: '0.8rem', color: '#fff', fontWeight: 700,
+                  flexShrink: 0,
+                }}>
+                  {uporabnik.username[0].toUpperCase()}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '0.78rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {uporabnik.username}
+                  </div>
+                  <div style={{ fontSize: '0.62rem', color: 'var(--besedilo3)' }}>
+                    {uporabnik.vloga === 'admin' ? '👑 Admin' : '👤 Uporabnik'}
+                  </div>
+                </div>
+              </div>
+              {/* Odjava gumb */}
+              <button
+                onClick={onOdjava}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '7px 10px', borderRadius: 8, border: '1.5px solid var(--rob)',
+                  background: 'transparent', cursor: 'pointer', color: 'var(--rdeca)',
+                  fontSize: '0.8rem', fontWeight: 600, transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--rdeca)15'; e.currentTarget.style.borderColor = 'var(--rdeca)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'var(--rob)' }}
+              >
+                <i className="ti ti-logout" style={{ fontSize: '0.9rem' }} />
+                Odjava
+              </button>
+            </div>
+          )}
           <button className={`nav-element ${stran === 'nastavitve' ? 'aktiven' : ''}`}
             onClick={() => { setStran('nastavitve'); setMobilniMenuOdprt(false) }}>
             <i className={`nav-ikona ti ${STRANI.nastavitve.ikona}`} />{STRANI.nastavitve.oznaka}
@@ -247,8 +316,19 @@ function HamburgerGumb({ onClick }) {
   )
 }
 
+function beriPrijavo() {
+  try {
+    const jwt      = localStorage.getItem('studyos-jwt')
+    const username = localStorage.getItem('studyos-username')
+    const vloga    = localStorage.getItem('studyos-vloga')
+    if (username) return { username, vloga: vloga || 'uporabnik', jwt }
+  } catch {}
+  return null
+}
+
 export default function App() {
   const [splash,          setSplash]          = useState(true)
+  const [prijavljenUporabnik, setPrijavljenUporabnik] = useState(beriPrijavo)
   const [stran,           setStran]           = useState('pregled')
   const [temno,           setTemno]           = useState(() => {
     try { return localStorage.getItem('studyos-tema') === 'temno' } catch { return false }
@@ -428,6 +508,44 @@ export default function App() {
     }
   }, [])
 
+  // Samodejni dnevni backup ob polnoči
+  useEffect(() => {
+    const BACKUP_KLJUC = 'studyos-zadnji-backup'
+
+    async function narediBackup() {
+      const danes = new Date().toISOString().slice(0, 10)
+      if (localStorage.getItem(BACKUP_KLJUC) === danes) return
+      try {
+        const { pridobiZapiske, pridobiNaloge, pridobiUrnik } = await import('./api.js')
+        const [z, n, u] = await Promise.all([pridobiZapiske(), pridobiNaloge(), pridobiUrnik()])
+        const podatki = {
+          verzija: '2.0', datum: new Date().toISOString(),
+          zapiski: z, naloge: n, urnik: u,
+        }
+        const blob = new Blob([JSON.stringify(podatki, null, 2)], { type: 'application/json' })
+        const url  = URL.createObjectURL(blob)
+        const a    = document.createElement('a')
+        a.href = url
+        a.download = `studyos-backup-${danes}.json`
+        document.body.appendChild(a); a.click()
+        document.body.removeChild(a); URL.revokeObjectURL(url)
+        localStorage.setItem(BACKUP_KLJUC, danes)
+      } catch {}
+    }
+
+    // Preveri ob zagonu
+    narediBackup()
+
+    // Preveri vsako uro ali je polnoč
+    const interval = setInterval(() => {
+      const ura = new Date().getHours()
+      const min = new Date().getMinutes()
+      if (ura === 0 && min < 5) narediBackup()
+    }, 60000)
+
+    return () => clearInterval(interval)
+  }, [])
+
   function klikPredmet(id) {
     if (aktivniPredmet === id) { setAktivniPredmet(null) }
     else { setAktivniPredmet(id); if (stran !== 'naloge') setStran('zapiski') }
@@ -442,6 +560,11 @@ export default function App() {
   const brezOdmika = stran === 'zapiski'
 
   if (splash) return <SplashScreen onDone={() => setSplash(false)} />
+  if (!prijavljenUporabnik) return (
+    <ToastPonudnik>
+      <Prijava onPrijava={u => setPrijavljenUporabnik(u)} />
+    </ToastPonudnik>
+  )
 
   return (
     <ToastPonudnik>
@@ -469,12 +592,20 @@ export default function App() {
             mobilniMenuOdprt={mobilniMenu}
             setMobilniMenuOdprt={setMobilniMenu}
             vseTagi={vseTagi}
+            setVseTagi={setVseTagi}
             aktivniTag={aktivniTag}
             setAktivniTag={setAktivniTag}
             onTedenski={() => setTedenski(true)}
             jeOnline={jeOnline}
             onHitraSeja={() => setHitraSeja(true)}
             nedavniZapiski={nedavniZapiski}
+            uporabnik={prijavljenUporabnik}
+            onOdjava={() => {
+              localStorage.removeItem('studyos-jwt')
+              localStorage.removeItem('studyos-username')
+              localStorage.removeItem('studyos-vloga')
+              setPrijavljenUporabnik(null)
+            }}
           />
 
           <main className={`glavna-vsebina ${brezOdmika ? 'brez-odmika' : ''}`}>

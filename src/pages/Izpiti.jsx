@@ -30,6 +30,69 @@ function barvaOdstevanja(dni) {
   return 'var(--zelena)'
 }
 
+function OcenaModal({ izpit, predmeti, onZapri, onShrani }) {
+  const pred = predmeti.find(p => p.id === izpit.predmet)
+  const [ocena, setOcena] = useState(izpit.ocena || '')
+
+  function shrani() {
+    if (!ocena) return
+    // Dodaj v studyos-ocene localStorage
+    try {
+      const ocene = JSON.parse(localStorage.getItem('studyos-ocene') || '[]')
+      const novaOcena = {
+        id: Date.now().toString(36),
+        predmet: izpit.predmet || '',
+        predmetIme: pred?.ime || izpit.naziv,
+        ocena: parseFloat(ocena),
+        naziv: izpit.naziv,
+        datum: new Date().toISOString().slice(0, 10),
+        tip: 'izpit',
+      }
+      ocene.push(novaOcena)
+      localStorage.setItem('studyos-ocene', JSON.stringify(ocene))
+    } catch {}
+    onShrani(izpit._id, parseFloat(ocena))
+    prikaziObvestilo(`Ocena ${ocena} shranjena ✓`, 'uspeh')
+    onZapri()
+  }
+
+  return (
+    <div className="modal-ozadje" onClick={e => e.target === e.currentTarget && onZapri()}>
+      <div className="modal" style={{ maxWidth: 360 }}>
+        <h2 className="modal-naslov">
+          <i className="ti ti-star" style={{ color: 'var(--rumena)' }} /> Vpiši oceno
+        </h2>
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>{izpit.naziv}</div>
+          {pred && <div style={{ fontSize: '0.8rem', color: pred.barva }}>{pred.ikona} {pred.ime}</div>}
+        </div>
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ fontSize: '0.8rem', color: 'var(--besedilo3)', display: 'block', marginBottom: 8 }}>
+            Ocena (1–10)
+          </label>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {[1,2,3,4,5,6,7,8,9,10].map(o => (
+              <button key={o} onClick={() => setOcena(o)} style={{
+                width: 42, height: 42, borderRadius: 8, fontWeight: 700, fontSize: '1rem',
+                border: `2px solid ${ocena == o ? 'var(--modra)' : 'var(--rob)'}`,
+                background: ocena == o ? 'var(--modra)' : 'transparent',
+                color: ocena == o ? '#fff' : 'var(--besedilo1)',
+                cursor: 'pointer',
+              }}>{o}</button>
+            ))}
+          </div>
+        </div>
+        <div className="modal-dno">
+          <button className="gumb gumb-sekundarni" onClick={onZapri}>Prekliči</button>
+          <button className="gumb gumb-primarni" onClick={shrani} disabled={!ocena}>
+            <i className="ti ti-check" /> Shrani oceno
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function AiNacrtModal({ izpit, predmeti, onZapri }) {
   const pred = predmeti.find(p => p.id === izpit.predmet)
   const [nacrt, setNacrt]   = useState('')
@@ -73,12 +136,13 @@ function AiNacrtModal({ izpit, predmeti, onZapri }) {
   )
 }
 
-function IzpitKartica({ izpit, predmeti, onPreklopi, onIzbrisi }) {
+function IzpitKartica({ izpit, predmeti, onPreklopi, onIzbrisi, onVpiziOceno }) {
   const pred = predmeti.find(p => p.id === izpit.predmet)
   const dni = steviloDni(izpit.datum)
   const jeDanes = dni === 0
   const jeKmalu = dni !== null && dni >= 0 && dni < 7
-  const [nacrtOdprt, setNacrtOdprt] = useState(false)
+  const [nacrtOdprt,  setNacrtOdprt]  = useState(false)
+  const [ocenaOdprt,  setOcenaOdprt]  = useState(false)
 
   return (
     <div
@@ -142,21 +206,33 @@ function IzpitKartica({ izpit, predmeti, onPreklopi, onIzbrisi }) {
             {izpit.opravljeno ? '✓ Opravljeno' : 'Označi kot opravljeno'}
           </span>
         </label>
-        {!izpit.opravljeno && (
-          <button
-            className="gumb gumb-sekundarni"
-            style={{ fontSize: '0.75rem', padding: '5px 10px', gap: 5 }}
-            onClick={() => setNacrtOdprt(true)}
-            title="AI učni načrt do izpita"
-          >
-            <i className="ti ti-sparkles" style={{ color: 'var(--vijolicna)' }} /> AI načrt
+        <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+          {izpit.opravljeno && (
+            izpit.ocena ? (
+              <span style={{ fontSize:'0.78rem', fontWeight:700, background:'var(--zelena)22', color:'var(--zelena)', padding:'3px 10px', borderRadius:99 }}>
+                ★ {izpit.ocena}
+              </span>
+            ) : (
+              <button className="gumb gumb-sekundarni" style={{ fontSize:'0.75rem', padding:'5px 10px' }}
+                onClick={() => setOcenaOdprt(true)}>
+                <i className="ti ti-star" style={{ color:'var(--rumena)' }} /> Vpiši oceno
+              </button>
+            )
+          )}
+          {!izpit.opravljeno && (
+            <button className="gumb gumb-sekundarni" style={{ fontSize:'0.75rem', padding:'5px 10px', gap:5 }}
+              onClick={() => setNacrtOdprt(true)} title="AI učni načrt do izpita">
+              <i className="ti ti-sparkles" style={{ color:'var(--vijolicna)' }} /> AI načrt
+            </button>
+          )}
+          <button className="gumb-ikona rdeca" onClick={() => onIzbrisi(izpit._id)}>
+            <i className="ti ti-trash" style={{ fontSize:'0.75rem' }} />
           </button>
-        )}
-        <button className="gumb-ikona rdeca" onClick={() => onIzbrisi(izpit._id)}>
-          <i className="ti ti-trash" style={{ fontSize: '0.75rem' }} />
-        </button>
+        </div>
       </div>
       {nacrtOdprt && <AiNacrtModal izpit={izpit} predmeti={predmeti} onZapri={() => setNacrtOdprt(false)} />}
+      {ocenaOdprt && <OcenaModal izpit={izpit} predmeti={predmeti} onZapri={() => setOcenaOdprt(false)}
+        onShrani={(id, ocena) => onVpiziOceno?.(id, ocena)} />}
     </div>
   )
 }
@@ -283,6 +359,11 @@ export default function Izpiti() {
     prikaziObvestilo('Izpit izbrisan', 'uspeh')
   }
 
+  function vpiziOceno(id, ocena) {
+    const novi = izpiti.map(iz => iz._id === id ? { ...iz, ocena } : iz)
+    setIzpiti(novi); shraniLS(novi)
+  }
+
   const danes = new Date().toISOString().slice(0, 10)
   const filtrirani = izpiti.filter(iz => {
     if (filter === 'prihodnji') return iz.datum >= danes && !iz.opravljeno
@@ -386,6 +467,7 @@ export default function Izpiti() {
               predmeti={predmeti}
               onPreklopi={preклоpiOpravljeno}
               onIzbrisi={izbrisi}
+              onVpiziOceno={vpiziOceno}
             />
           ))}
         </div>
